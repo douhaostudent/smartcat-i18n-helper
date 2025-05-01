@@ -1,0 +1,1 @@
+import  { Position,Range,window } from 'vscode';
