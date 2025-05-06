@@ -100,8 +100,7 @@ export const getValue = (
   words: any,
   instance: BaseI18nHelper,
 ) => {
-  const { key, value, rawValue, isJsxAttr, isJsxText, isTemplate } = words;
-
+  const { key, value, rawValue, isJsxAttr, isJsxText, isTemplate, isTranslated= false } = words;
   if (isTemplate) {
     return `\${${instance.methodName}("${key}" /* ${value} */)}`;
   }
@@ -116,6 +115,29 @@ export const getValue = (
 
   return `{${instance.methodName}("${key}" /* ${value} */)}`;
 };
+
+export const replaceKey = (
+  words: any,
+) => {
+  const { key, value, rawValue, isJsxAttr, isJsxText, isTemplate } = words;
+  if (isTemplate) {
+    return `\${"${key}" /* ${value} */}`;
+  }
+
+  if (!isJsxAttr) {
+    return `"${key}" /* ${value} */`;
+  }
+
+  if (isJsxText) {
+    return rawValue.replace(value, `{"${key}" /* ${value} */}`);
+  }
+
+  return `{"${key}" /* ${value} */}`;
+};
+
+
+
+
 
 export const getLocalWordsByFileName = (
   fileName: string,

@@ -2,15 +2,15 @@ import { window, workspace, ViewColumn, Position, Range } from "vscode";
 import { existsSync } from "fs";
 import { join } from "path";
 import { getLoadingHtml, getTranslateWebviewHtml, getWordWebviewHtml } from './html';
-// import { Position, Range, window } from 'vscode';
 import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
-import type { ParseResult } from "@babel/parser";
+import type { ParseError, ParseResult } from "@babel/parser";
 import type { File } from '@babel/types';
-import { getLocalWordsByFileName, saveToLocalFile } from './service';
+import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './service';
 import type { ExtensionContext, Uri, WebviewPanel } from "vscode";
 import { getFilesByFileType } from './utils';
 import { getValue } from "./service";
+import * as t from '@babel/types';
 const DEFAULT_LANG_TYPE = 'zh-Hans';
 interface SourceLocation {
     start: {
@@ -135,6 +135,44 @@ export default class SmartI18nHelper {
     }
 
 
+ /**
+  * 检查节点是否被 t() 函数包裹
+  * @param path 
+  * @returns  boolean  
+  */
+   isWrappedByTFunction(path: any): boolean {
+    let parent = path.parent;
+    
+    // 检查是否是 t() 函数的参数
+    if (t.isCallExpression(parent)) {
+      const callee = parent.callee;
+      if (t.isIdentifier(callee, { name: 't' })) {
+        return true;
+      }
+    }
+    
+    // 检查是否是模板字符串中的 t() 调用
+    if (t.isTemplateLiteral(parent)) {
+      const grandParent = path.parentPath.parent;
+      if (t.isCallExpression(grandParent) && 
+          t.isIdentifier(grandParent.callee, { name: 't' })) {
+        return true;
+      }
+    }
+    
+    // 检查 JSX 属性中的 t() 调用
+    if (t.isJSXAttribute(parent)) {
+      if (t.isJSXExpressionContainer(parent.value) &&
+          t.isCallExpression(parent.value.expression) &&
+          t.isIdentifier(parent.value.expression.callee, { name: 't' })) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+
     /**
      *  通过ast 获取中文words
      */
@@ -144,35 +182,41 @@ export default class SmartI18nHelper {
         traverse(ast, {
             ["StringLiteral"]: (path: any) => {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
+                    const isTranslated = this.isWrappedByTFunction(path);
                     words.push({
                         value: path.node.value,
                         loc: path.node.loc,
                         isJsxAttr: path.parent.type === "JSXAttribute",
-                        id: '11',  
+                        id: `${Math.random()}11`,  
+                        isTranslated:isTranslated
                     });
                 }
             },
             ["JSXText"]: (path: any) => {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
+                    const isTranslated = this.isWrappedByTFunction(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
-                        id: '111',
+                        id: `${Math.random()}1111`,  
                         value: val,
                         loc: path.node.loc,
                         isJsxAttr: true,
                         isJsxText: true,
                         rawValue: path.node.value,
+                        isTranslated:isTranslated
                     });
                 }
             },
             ["TemplateElement"]: (path: any) => {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value.raw)) {
+                    const isTranslated = this.isWrappedByTFunction(path);
                     const val = path.node.value.raw.replace(/\n/g, '').trim();
                     words.push({
-                        id: '111',
+                        id: `${Math.random}1`,  
                         value: val,
                         loc: path.node.loc,
                         isTemplate: true,
+                        isTranslated:isTranslated
                     });
                 }
             }
@@ -239,62 +283,65 @@ export default class SmartI18nHelper {
         }
     }
 
-
-    private async getTranslateResult(
+     async getTranslateResult(
         defalutLanguage: Language, data: Words[]
-    ): Promise<Words[]> {
+      ): Promise<Words[]> {
         const defaultWords = getLocalWordsByFileName(defalutLanguage.localeFileName, true, this);
-        //  defaultwords 是将中文和key翻转一下
-        //    data  当前文件需要翻译的中文words结合
+    
         data.forEach((item: any) => {
-            if (defaultWords[item.value]) {
-                item.key = defaultWords[item.value];  // 英文key
-                item[DEFAULT_LANG_TYPE] = {
-                    exists: true,
-                    value: item.value,
-                };
-            } else {
-                item.key = `no-exists-${Math.random()}`;
-                item[DEFAULT_LANG_TYPE] = {
-                    exists: false,
-                    value: item.value,
-                };
-            }
+          if (defaultWords[item.value]) {
+            item.key = defaultWords[item.value];
+            item[DEFAULT_LANG_TYPE] = {
+              exists: true,
+              value: item.value,
+            };
+          } else {
+            // item.key = `${item.id.slice(0, 4)}${item.id.slice(-4)}`;
+            item[DEFAULT_LANG_TYPE] = {
+              exists: false,
+              value: item.value,
+            };
+          }
         });
-        // 排除基准中文需要翻译的语言结合  后续可以跟smart 接口，不存在就
-        // const toTranslateLanguages = this.languages.filter(lang => lang.langType !== DEFAULT_LANG_TYPE);
-
-        // for (let i = 0; i < toTranslateLanguages.length; i += 1) {
-        //     const lang = toTranslateLanguages[i];
-        //     const words = getLocalWordsByFileName(lang.localeFileName, false, this);
-        //       const toTranslateWords = data.filter((item: any) => !words[item.key]).map((item: any) => item.value);
-
-        //       let transResult: any = {};
-
-        //       if (toTranslateWords.length) {
-        //         try {
-        //           transResult = await translates(toTranslateWords, lang.langType);
-        //         } catch {
-        //           return [];
-        //         }
-        //         if (i !== toTranslateLanguages.length - 1) {
-        //           await sleep(1000);
-        //         }
-        //       }
-
-        //     data.forEach((item: Words) => {
-        //         const value = words[item.key!];
-        //         item[lang.langType] = {
-        //             exists: !!value,
-        //             value: value
-        //             //   value: value || transResult[item.value],
-        //         };
-        //     });
-
-        // }
+    
+        const toTranslateLanguages = this.languages.filter(lang => lang.langType !== DEFAULT_LANG_TYPE);
+    
+        for (let i = 0; i < toTranslateLanguages.length; i += 1) {
+          const lang = toTranslateLanguages[i];
+    
+          const words = getLocalWordsByFileName(lang.localeFileName, false, this);
+          const toTranslateWords = data.filter((item: any) => !words[item.key]).map((item: any) => item.value);
+    
+          let transResult: any = {};
+    
+          if (toTranslateWords.length) {
+            try {
+              transResult = {};
+            } catch {
+              return [];
+            }
+            if (i !== toTranslateLanguages.length - 1) {
+            //   await sleep(1000);
+            }
+          }
+    
+          data.forEach((item: Words) => {
+            const value = words[item.key!];
+            item[lang.langType] = {
+              exists: !!value,
+              value: value,
+            };
+          });
+    
+        }
         return data;
-    }
+      }
 
+
+
+
+
+      
     async translate(data: Words[]) {
 
         if (this.webviewPanel && this.currentTextDocumentFileUri) {
@@ -370,7 +417,8 @@ export default class SmartI18nHelper {
             save: async () => {
                 await window.showTextDocument(this.currentTextDocumentFileUri!);
                 saveToLocalFile(data as Words[], this);  //   需要新增的翻译语言 
-                await this.replaceEditorText();
+                await this.replaceEditorText(); 
+                // 自动导入和翻译hook的调用，后续追加
                 // await this.importMethod();
                 this.webviewPanel?.dispose();
             },
@@ -380,6 +428,35 @@ export default class SmartI18nHelper {
             methodMap[type]();
         }
     }
+
+    // 增加导入
+    async importMethod(): Promise<void> {
+        let isImported = false;
+    
+        const visitor: any = {
+           
+          ImportDefaultSpecifier: (nodePath: any) => {
+            if (nodePath.node.local.name === this.methodName) {
+              isImported = true;
+              nodePath.stop();
+            }
+          },
+           
+          ImportSpecifier: (nodePath: any) => {
+            if (nodePath.node.local.name === this.methodName) {
+              isImported = true;
+              nodePath.stop();
+            }
+          },
+        };
+    
+        traverse(this.ast as ParseResult<File>, visitor);
+        if (!isImported) {
+          await window?.activeTextEditor?.edit(editBuilder => {
+            editBuilder.insert(new Position(0, 0), this.importCode);
+          });
+        }
+      }
     async replaceEditorText():Promise<void>{
         await window?.activeTextEditor?.edit(editBuilder=>{
             this.translateWords?.forEach((element)=>{
@@ -388,20 +465,10 @@ export default class SmartI18nHelper {
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);
                 const selection = new Range(startPosition, endPosition);
                 if (!selection) { return; }
-                editBuilder.replace(selection, getValue(element, this));
+                editBuilder.replace(selection,  element.isTranslated ? replaceKey(element) : getValue(element, this));
             });
             
         });
 
     }
-
-
-
-
-
-
-
-
-
-
 }
