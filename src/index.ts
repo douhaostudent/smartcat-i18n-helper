@@ -180,24 +180,24 @@ export default class SmartI18nHelper {
     getChineseWordsByAst(ast: ParseResult<File>) {
         const words: Words[] = [];
         traverse(ast, {
-            ["StringLiteral"]: (path: any) => {
+            ["StringLiteral"]: (path: any) => {    //普通字符串 "中文"
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
                     const isTranslated = this.isWrappedByTFunction(path);
                     words.push({
+                        id:path.node.value, 
                         value: path.node.value,
                         loc: path.node.loc,
                         isJsxAttr: path.parent.type === "JSXAttribute",
-                        id: `${Math.random()}11`,  
                         isTranslated:isTranslated
                     });
                 }
             },
-            ["JSXText"]: (path: any) => {
+            ["JSXText"]: (path: any) => {     // JSX 中的文本（如 <div>中文</div>
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
                     const isTranslated = this.isWrappedByTFunction(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
-                        id: `${Math.random()}1111`,  
+                        id: path.node.value,     //  todo,id需要是唯一的key 不能有空格
                         value: val,
                         loc: path.node.loc,
                         isJsxAttr: true,
@@ -207,16 +207,16 @@ export default class SmartI18nHelper {
                     });
                 }
             },
-            ["TemplateElement"]: (path: any) => {
-                if (/[\u4e00-\u9fa5]/.test(path.node.value.raw)) {
+            ["TemplateElement"]: (path: any) => {  // 模板字符串中的静态部分（如 `中文${变量}` 中的 "中文"）
+                if (/[\u4e00-\u9fa5]/.test(path.node.value.raw)) {  
                     const isTranslated = this.isWrappedByTFunction(path);
-                    const val = path.node.value.raw.replace(/\n/g, '').trim();
+                    const val = path.node.value.raw.replace(/\n/g, '').trim();   
                     words.push({
-                        id: `${Math.random}1`,  
+                        id: path.node.value,  
                         value: val,
                         loc: path.node.loc,
                         isTemplate: true,
-                        isTranslated:isTranslated
+                        isTranslated: isTranslated
                     });
                 }
             }
@@ -296,7 +296,8 @@ export default class SmartI18nHelper {
               value: item.value,
             };
           } else {
-            // item.key = `${item.id.slice(0, 4)}${item.id.slice(-4)}`;
+            /// 暂时使用value当key  todo
+            item.key =  item.value,
             item[DEFAULT_LANG_TYPE] = {
               exists: false,
               value: item.value,
@@ -430,6 +431,14 @@ export default class SmartI18nHelper {
     }
 
     // 增加导入
+
+    // ​​Position(0, 0)​​
+    // 表示插入位置的行号和列号（从 0 开始计数），这里指文件开头。
+    // ​​this.importCode​​
+    // 是要插入的代码片段，通常是一个字符串（如 import ... 语句）。
+    // ​​editBuilder.insert​​
+    // 是编辑器 API 提供的方法，用于在指定位置插入内容。
+    
     async importMethod(): Promise<void> {
         let isImported = false;
     
@@ -445,7 +454,7 @@ export default class SmartI18nHelper {
           ImportSpecifier: (nodePath: any) => {
             if (nodePath.node.local.name === this.methodName) {
               isImported = true;
-              nodePath.stop();
+              nodePath.stop();  // 立即终止当前 AST 的遍历​​，避免不必要的后续检查
             }
           },
         };
@@ -453,6 +462,7 @@ export default class SmartI18nHelper {
         traverse(this.ast as ParseResult<File>, visitor);
         if (!isImported) {
           await window?.activeTextEditor?.edit(editBuilder => {
+
             editBuilder.insert(new Position(0, 0), this.importCode);
           });
         }
@@ -465,6 +475,7 @@ export default class SmartI18nHelper {
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);
                 const selection = new Range(startPosition, endPosition);
                 if (!selection) { return; }
+
                 editBuilder.replace(selection,  element.isTranslated ? replaceKey(element) : getValue(element, this));
             });
             

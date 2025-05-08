@@ -167,9 +167,9 @@
       <th>原文</th>
       <th>key</th>
       <% languages.forEach(function(item) { %>
-        <th>
+        <!-- <th>
           <%= item.langType %>
-        </th>
+        </th> -->
         <th>
           <%= item.langType %>状态
         </th>
@@ -185,9 +185,9 @@
           <%= item.key %>
         </td>
         <% languages.forEach(function(lang) { %>
-          <td data-id="<%=item.id%>">
+          <!-- <td data-id="<%=item.id%>">
             <%= item[lang.langType].value %>
-          </td>
+          </td> -->
           <td data-id="<%=item.id%>">
             <% const colorClass=item[lang.langType].exists ? 'exists' : 'new' %>
               <span class="badge <%= colorClass %>"></span>

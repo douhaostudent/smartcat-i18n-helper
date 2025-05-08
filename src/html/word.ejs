@@ -172,6 +172,8 @@
       const { target } = e;
 
       if (target.nodeName === 'A' && target.className === 'delete') {
+
+
         const id = target.getAttribute('data-id');
 
         const tr = document.querySelector(`tr#tr_${id}`);
