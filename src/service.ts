@@ -10,8 +10,13 @@ import * as path from 'path';
 
 import BaseI18nHelper from './index';
 import { Words } from './interface';
-
-export const saveToLocalFile = (
+ /**
+  *  在原有的翻译文件js,ts中追加 key,value
+  * @param 追加翻译
+  * @param instance   
+  * @returns 
+  */
+ export const saveToLocalFile = (
   data: Words[],
   instance: BaseI18nHelper,
 ) => {
@@ -33,7 +38,7 @@ export const saveToLocalFile = (
     window.showWarningMessage(`${instance.localesFullPath}文件夹不存在，已为您自动生成。`);
   }
 
-  instance.languages.forEach(lang => {
+  instance.languages.forEach(async lang => {
 
     const fullFilePath = path.join(instance.localesFullPath!, `./${lang.localeFileName}.${instance.fileType}`);
     if (!fs.existsSync(fullFilePath)) {
@@ -53,8 +58,8 @@ export const saveToLocalFile = (
 
     const fileContent = fs.readFileSync(fullFilePath).toString();
 
-    const ast = parse(fileContent, { sourceType: "module" });
-
+    const ast = parse(fileContent, { sourceType: "module" });  
+     // 遍历到对象表达式时，动态添加新属性  添加前检查 key 唯一性
     const visitor: any = {
        
       ObjectExpression(nodePath: any) {
@@ -72,25 +77,28 @@ export const saveToLocalFile = (
     };
 
     traverse(ast, visitor);
-
+// 这段代码使用 @babel/generator 将修改后的 AST 转换回代码字符串：
+// 适用场景：需要保留原始字符而非 Unicode 转义时
     const newContent = generator(ast, {
-      jsescOption: { minimal: true },
+      jsescOption: { minimal: true },   
     }).code;
 
-    const formatted = prettier.format(
+    const formattedCode = await prettier.format(
       newContent,
       {
         parser: 'babel',
-        trailingComma: 'all',
+        printWidth: 200,          // 单行最大长度（避免对象被拆分成多行）
+        singleQuote: true,        // 使用单引号
+        semi: false,              // 不加分号
+        trailingComma: "none",    // 禁用尾随逗号
+        proseWrap: "never"        // 禁止 Markdown 自动换行（对 JS 对象也有效）
+      
       }
     );
-
-    // if (formatted) {
-    // //   fs.writeFileSync(fullFilePath, formatted);
-    // }
+      fs.writeFileSync(fullFilePath,  formattedCode);
+    
   });
 };
-
 
 
 
@@ -218,6 +226,21 @@ export const getLocalWordsByFileNameJson = (
 
   return words;
 };
+
+
+export function sleep(time: number) {
+  return new Promise((resolve: any) => {
+    setTimeout(() => {
+      resolve();
+    }, time);
+  });
+}
+
+export function showError(errorText:string) {
+  if (errorText) {
+    window.showErrorMessage(errorText);
+  }
+}
 
 
 
