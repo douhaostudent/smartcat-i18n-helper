@@ -153,12 +153,16 @@
   <table width="96%" class="table">
     <tr>
       <th>字符串</th>
+      <th>console中文</th>
       <th style="width: 100px;">操作</th>
     </tr>
     <% words.forEach(function (item, index) { %>
       <tr id="tr_<%=item.id%>">
         <td class="name" data-id="<%=item.id%>">
           <%=item.value%>
+        </td>
+        <td class="isConsole" data-id="<%=item.isConsole%>">
+          <%=item.isConsole ? '是' : '否'%>
         </td>
         <td style="text-align: center;">
           <a data-id="<%=item.id%>" class='delete'>删除<a />

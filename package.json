@@ -51,22 +51,22 @@
       }
     ],
     "keybindings": [
-			{
+      {
         "command": "smart-i18n-helper.helloWorld",
-				"key": "ctrl+shift+t",
-				"mac": "cmd+shift+t",
-				"when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact"
-			}
-		],
-		"menus": {
-			"editor/context": [
-				{
-					"when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact",
-					"command": "smart-i18n-helper.helloWorld",
-					"group": "navigation@2"
-				}
-			]
-		}
+        "key": "ctrl+shift+t",
+        "mac": "cmd+shift+t",
+        "when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "smart-i18n-helper.helloWorld",
+          "when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact",
+          "group": "navigation@7"
+        }
+      ]
+    }
   },
   "scripts": {
     "vscode:prepublish": "npm run package",

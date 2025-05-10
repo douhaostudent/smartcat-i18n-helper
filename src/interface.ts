@@ -18,6 +18,7 @@ interface SourceLocation {
     rawValue?: string;
     id:string;
     key?: string;
+    isConsole:boolean;   //翻译页面的是时候，提示用户哪些是删除的console,前置校验
     [k: string]: any;
   }
   

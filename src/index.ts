@@ -36,6 +36,7 @@ export interface Words {
     isJsxText?: boolean;
     isTemplate?: boolean;
     rawValue?: string;
+    isConsole: boolean;
     key?: string;
     id: string;
     [k: string]: any;
@@ -76,7 +77,10 @@ export default class SmartI18nHelper {
         this.getLanguages();
         //获取需要翻译的中文
         this.words = this.getChineseWords();
-        if (!this.words?.length) { return; }
+        if (!this.words?.length) {
+            window.showInformationMessage('当前页面无中文，无需翻译');
+            return;
+        }
         // 将需要翻译的中文列举出来
         this.openWordsPage();
 
@@ -139,9 +143,10 @@ export default class SmartI18nHelper {
     /**
      * 检查节点是否被 t() 函数包裹
      * @param path 
+     * @param functionName  函数类型
      * @returns  boolean  
      */
-    isWrappedByTFunction(path: any): boolean {
+    isWrappedBytFunction(path: any): boolean {
         let parent = path.parent;
 
         // 检查是否是 t() 函数的参数
@@ -172,7 +177,59 @@ export default class SmartI18nHelper {
 
         return false;
     }
+    /**
+ * 
+ * @param node 
+ * @returns 
+ */
+    /**
+   * 检查节点是否被 console 函数包裹
+   * @param path Babel 路径对象
+   * @returns boolean
+   */
+    isWrappedByConsole(path: any): boolean {
+        const parent = path.parent;
 
+        // 1. 检查是否是 console.x() 的直接参数
+        if (t.isCallExpression(parent)) {
+            const callee = parent.callee;
+            if (
+                t.isMemberExpression(callee) &&
+                t.isIdentifier(callee.object, { name: 'console' }) &&
+                t.isIdentifier(callee.property) // 可以是 log/error/warn 等
+            ) {
+                return true;
+            }
+        }
+
+        // 2. 检查是否是模板字符串中的 console 调用
+        if (t.isTemplateLiteral(parent)) {
+            const grandParent = path.parentPath.parent;
+            if (
+                t.isCallExpression(grandParent) &&
+                t.isMemberExpression(grandParent.callee) &&
+                t.isIdentifier(grandParent.callee.object, { name: 'console' }) &&
+                t.isIdentifier(grandParent.callee.property)
+            ) {
+                return true;
+            }
+        }
+
+        // 3. 检查 JSX 属性中的 console 调用
+        if (t.isJSXAttribute(parent)) {
+            if (
+                t.isJSXExpressionContainer(parent.value) &&
+                t.isCallExpression(parent.value.expression) &&
+                t.isMemberExpression(parent.value.expression.callee) &&
+                t.isIdentifier(parent.value.expression.callee.object, { name: 'console' }) &&
+                t.isIdentifier(parent.value.expression.callee.property)
+            ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      *  通过ast 获取中文words
@@ -183,41 +240,47 @@ export default class SmartI18nHelper {
         traverse(ast, {
             ["StringLiteral"]: (path: any) => {    //普通字符串 "中文"
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
-                    const isTranslated = this.isWrappedByTFunction(path);
+                    const isTranslated = this.isWrappedBytFunction(path);
+                    const isConsole = this.isWrappedByConsole(path);
                     words.push({
-                        id: path.node.value,
+                        id: path.node.value.replace(/[^\u4e00-\u9fa5]/g, ''),
                         value: path.node.value,
                         loc: path.node.loc,
                         isJsxAttr: path.parent.type === "JSXAttribute",
-                        isTranslated: isTranslated
+                        isTranslated: isTranslated,
+                        isConsole: isConsole,
                     });
                 }
             },
             ["JSXText"]: (path: any) => {     // JSX 中的文本（如 <div>中文</div>
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
-                    const isTranslated = this.isWrappedByTFunction(path);
+                    const isTranslated = this.isWrappedBytFunction(path);
+                    const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
-                        id: path.node.value,     //  todo,id需要是唯一的key 不能有空格
+                        id: val.replace(/[^\u4e00-\u9fa5]/g, ''),   //  todo,id需要是唯一的key 不能有空格
                         value: val,
                         loc: path.node.loc,
                         isJsxAttr: true,
                         isJsxText: true,
                         rawValue: path.node.value,
-                        isTranslated: isTranslated
+                        isTranslated: isTranslated,
+                        isConsole: isConsole, //默认jsx无console
                     });
                 }
             },
             ["TemplateElement"]: (path: any) => {  // 模板字符串中的静态部分（如 `中文${变量}` 中的 "中文"）
                 if (/[\u4e00-\u9fa5]/.test(path.node.value.raw)) {
-                    const isTranslated = this.isWrappedByTFunction(path);
+                    const isTranslated = this.isWrappedBytFunction(path);
+                    const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.raw.replace(/\n/g, '').trim();
                     words.push({
-                        id: path.node.value,
+                        id: val.replace(/[^\u4e00-\u9fa5]/g, ''),
                         value: val,
                         loc: path.node.loc,
                         isTemplate: true,
-                        isTranslated: isTranslated
+                        isTranslated: isTranslated,
+                        isConsole: isConsole
                     });
                 }
             }
@@ -288,8 +351,8 @@ export default class SmartI18nHelper {
         defalutLanguage: Language, data: Words[]
     ): Promise<Words[]> {
         const defaultWords = getLocalWordsByFileName(defalutLanguage.localeFileName, true, this);
-        let needSmartCatTranslateWords:Words[] = [];  //中文【首页】
-        let hasTranslatedWords:Words[]= [];
+        let needSmartCatTranslateWords: Words[] = [];  //中文【首页】
+        let hasTranslatedWords: Words[] = [];
         data.forEach((item: any) => {
             if (defaultWords[item.value]) {
                 item.key = defaultWords[item.value];
@@ -315,7 +378,7 @@ export default class SmartI18nHelper {
         for (let i = 0; i < toTranslateLanguages.length; i += 1) {
             const lang = toTranslateLanguages[i];
             const words = getLocalWordsByFileName(lang.localeFileName, false, this);
-             hasTranslatedWords.forEach((item: Words) => {
+            hasTranslatedWords.forEach((item: Words) => {
                 const value = words[item.key!];
                 item[lang.langType] = {
                     exists: !!value,
@@ -347,7 +410,7 @@ export default class SmartI18nHelper {
                             // 需要翻译的语言文件合并后，同步相应的数据
                             item[lang.langType] = {
                                 exists: false,
-                                value: smartcatResult[key!],
+                                value: smartcatResult[key!] || 'smart无对对应的翻译',
                             };
                         } else {
                             showError('smart远程无对应的翻译');

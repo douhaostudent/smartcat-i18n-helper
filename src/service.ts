@@ -90,7 +90,7 @@ import { Words } from './interface';
         printWidth: 200,          // 单行最大长度（避免对象被拆分成多行）
         singleQuote: true,        // 使用单引号
         semi: false,              // 不加分号
-        trailingComma: "none",    // 禁用尾随逗号
+        trailingComma: "es5",    // es5语法尾随逗号
         proseWrap: "never"        // 禁止 Markdown 自动换行（对 JS 对象也有效）
       
       }
