@@ -56,6 +56,7 @@ export default class SmartI18nHelper {
     localesFullPath: string = '';
     words: Words[] = [];
     translateWords: Words[] = [];
+    hasTranslateWordsSet:Set<string> = new Set();  // 默认中文反查的key集合  采用map,查找时间复杂度o(1)
     languages: Language[] = [];  //支持的语言 遍历一个文件本地
     ast: ParseResult<File> | undefined;
     titleChangeTimer: NodeJS.Timeout | undefined;
@@ -243,7 +244,7 @@ export default class SmartI18nHelper {
                     const isTranslated = this.isWrappedBytFunction(path);
                     const isConsole = this.isWrappedByConsole(path);
                     words.push({
-                        id: path.node.value.replace(/[^\u4e00-\u9fa5]/g, ''),
+                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`, //id 必须唯一,删除是以id 维度
                         value: path.node.value,
                         loc: path.node.loc,
                         isJsxAttr: path.parent.type === "JSXAttribute",
@@ -258,7 +259,7 @@ export default class SmartI18nHelper {
                     const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
-                        id: val.replace(/[^\u4e00-\u9fa5]/g, ''),   //  todo,id需要是唯一的key 不能有空格
+                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`,  //  todo,id需要是唯一的key 不能有空格
                         value: val,
                         loc: path.node.loc,
                         isJsxAttr: true,
@@ -275,7 +276,7 @@ export default class SmartI18nHelper {
                     const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.raw.replace(/\n/g, '').trim();
                     words.push({
-                        id: val.replace(/[^\u4e00-\u9fa5]/g, ''),
+                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`,  
                         value: val,
                         loc: path.node.loc,
                         isTemplate: true,
@@ -351,11 +352,16 @@ export default class SmartI18nHelper {
         defalutLanguage: Language, data: Words[]
     ): Promise<Words[]> {
         const defaultWords = getLocalWordsByFileName(defalutLanguage.localeFileName, true, this);
+    //  以英文key 为唯一标识，暂不考虑中文重复的case
+        Object.entries(defaultWords).forEach(([key,value])=>{
+            this.hasTranslateWordsSet.add(value as string);
+        });
         let needSmartCatTranslateWords: Words[] = [];  //中文【首页】
         let hasTranslatedWords: Words[] = [];
         data.forEach((item: any) => {
             if (defaultWords[item.value]) {
                 item.key = defaultWords[item.value];
+                item.isRepetitionKey= false; //本地已有的翻译 对象，不会有重复的key ,无需判断
                 item[DEFAULT_LANG_TYPE] = {
                     exists: true,
                     value: item.value,
@@ -398,6 +404,7 @@ export default class SmartI18nHelper {
                         const key = Object.entries(defaultLangTypeTransResult).find(([k, v]) => v === item.value)?.[0];   //标准中文翻译ts对象中返查key
                         if (key) {
                             item.key = key;
+                            item.isRepetitionKey= this.hasTranslateWordsSet.has(key);
                             // 基准文件zh-Hans 追加合并smart远程数据
                             defaultWords[key!] = defaultLangTypeTransResult[key!];
                             // 合并 ------ 将远程拉取的翻译与现有的翻译文件 ,只合并当前翻译的key,value
@@ -552,7 +559,8 @@ export default class SmartI18nHelper {
     }
     async replaceEditorText(): Promise<void> {
         await window?.activeTextEditor?.edit(editBuilder => {
-            this.translateWords?.forEach((element) => {
+            // 过滤从smartkey 新拉取的重复key 要保持key的唯一性 
+            this.translateWords?.filter(item=>!item.isRepetitionKey).forEach((element) => {
                 const { loc } = element;
                 const startPosition = new Position(loc.start.line - 1, loc.start.column);
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);

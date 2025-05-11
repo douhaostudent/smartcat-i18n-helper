@@ -61,6 +61,12 @@
       padding: 10px 1em;
       cursor: pointer;
     }
+    .warning-text{
+    color:#ff4d4f;
+    }
+    .success-text{
+      color:#bae637;
+    }
 
     .button {
       display: inline-block;
@@ -161,7 +167,7 @@
         <td class="name" data-id="<%=item.id%>">
           <%=item.value%>
         </td>
-        <td class="isConsole" data-id="<%=item.isConsole%>">
+        <td class="<%=item.isConsole ? 'warning-text' : 'success-text'%>" data-id="<%=item.isConsole%>">
           <%=item.isConsole ? '是' : '否'%>
         </td>
         <td style="text-align: center;">

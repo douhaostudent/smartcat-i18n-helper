@@ -57,6 +57,19 @@
       padding: 10px 1em;
       cursor: pointer;
     }
+    .error-key {
+      color:#ff4d4f;
+    }
+    .success-key{
+      color:#bae637;
+    }
+    .save-tip {
+      height: 1em;
+      line-height: 1em;
+      font-size: 1em;
+      color:#fadb14;
+      margin-right: 12px;
+    }
 
     .button {
       display: inline-block;
@@ -160,12 +173,17 @@
 
 <body>
   <div style="text-align: right;margin: 20px auto; width: 96%; font-size: 16px;">
+  <!-- <svg viewBox="64 64 896 896" focusable="false" data-icon="exclamation-circle" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm-32 232c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v272c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V296zm32 440a48.01 48.01 0 010-96 48.01 48.01 0 010 96z"></path></svg> -->
+    <span class="save-tip">
+      温馨提示：非唯一的key保存会自动忽略
+    </span>
     <button class="button">保 存</button>
   </div>
   <table width="96%" class="table">
     <tr>
       <th>原文</th>
       <th>key</th>
+      <th>key唯一</th>
       <% languages.forEach(function(item) { %>
         <!-- <th>
           <%= item.langType %>
@@ -183,6 +201,9 @@
         </td>
         <td data-id="<%=item.id%>" class="key">
           <%= item.key %>
+        </td>
+        <td data-id="<%=item.isRepetitionKey%>" class="<%=item.isRepetitionKey ? 'error-key' : 'success-key'%>">
+          <%= item.isRepetitionKey? '否':'是' %>
         </td>
         <% languages.forEach(function(lang) { %>
           <!-- <td data-id="<%=item.id%>">
@@ -216,7 +237,7 @@
 
     function save() {
       vscode.postMessage({
-        data: window.words,
+        data: window.words.filter(item=>!item.isRepetitionKey),
         type: "save",
       });
     }

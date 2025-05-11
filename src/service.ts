@@ -44,10 +44,11 @@ import { Words } from './interface';
     if (!fs.existsSync(fullFilePath)) {
       window.showWarningMessage(`${lang.localeFileName}文件不存在，已为您自动生成。`);
       fs.writeFileSync(fullFilePath, 'export default {}');
-    }
-
-    const newWords = data.reduce((prev: { key: string, value: string }[], item: any) => {
-      if (!item[lang.langType]?.exists && !prev.some(o => o.key === item.key)) {
+    } 
+    // smart拉取新增的key,与当前本地key重复的,filter
+    const newWords = data.filter(item=>!item?.isRepetitionKey).reduce((prev: { key: string, value: string}[], item: any) => {
+        
+      if (!item[lang.langType]?.exists && !prev.some(o => o.key === item.key)) {  
         prev.push({
           key: item.key,
           value: item[lang.langType]?.value,
