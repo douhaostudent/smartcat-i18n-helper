@@ -371,7 +371,8 @@ export default class SmartI18nHelper {
                 //需要smart翻译的key需要拉取翻译，再赋值
                 item[DEFAULT_LANG_TYPE] = {
                     exists: false,
-                    value: item.value,
+                    // value: item.value,
+                    value:'',
                 };
                 needSmartCatTranslateWords.push(item);
             }
@@ -397,7 +398,7 @@ export default class SmartI18nHelper {
             for (let i = 0; i < toTranslateLanguages.length; i += 1) {
                 const lang = toTranslateLanguages[i];
                 smartcatResult = allLangSmartcatResult.length && allLangSmartcatResult.find((item: any) => item && item.langType === lang.langType).result;
-                needSmartCatTranslateWords.forEach((item: Words) => {
+                needSmartCatTranslateWords.forEach((item: Words,index) => {
                     //需要给新追加赋值key     
                     if (item[DEFAULT_LANG_TYPE].exists === false) {
                         const defaultLangTypeTransResult = allLangSmartcatResult.length && allLangSmartcatResult.find((item: any) => item && item.langType === DEFAULT_LANG_TYPE).result;
@@ -420,7 +421,16 @@ export default class SmartI18nHelper {
                                 value: smartcatResult[key!] || 'smart无对对应的翻译',
                             };
                         } else {
-                            showError('smart远程无对应的翻译');
+                            //smart 远程没有相应的key翻译
+                            const tempKey  = `no-translate-word${index}`;
+                            item.key = tempKey;
+                            item.isRepetitionKey=true;
+                            defaultWords[tempKey!] = '暂无翻译';            
+                            // 需要翻译的语言文件合并后，同步相应的数据
+                            item[lang.langType] = {
+                                exists: false,
+                                value: '',
+                            };
                         }
 
                     }
