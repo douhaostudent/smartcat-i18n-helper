@@ -6,11 +6,11 @@ import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import type { ParseError, ParseResult } from "@babel/parser";
 import type { File } from '@babel/types';
-import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './service';
+import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './editCode';
 import { saveFormatKeyToLocalFile } from "./feature";
 import type { ExtensionContext, Uri, WebviewPanel } from "vscode";
 import { getFilesByFileType } from './utils';
-import { getValue, sleep, showError } from "./service";
+import { getValue, sleep, showError } from "./editCode";
 import * as t from '@babel/types';
 import translateSmartcatLocaleAll from './smartcat';
 const DEFAULT_LANG_TYPE = 'zh-Hans';
@@ -583,6 +583,13 @@ export default class SmartI18nHelper {
         const methodMap: { [k: string]: Function } = {
             open: () => {
                 this.skipAndSelectWords(data as Words);
+            },
+            update:()=>{
+                if(this.webviewPanel){
+                    this.webviewPanel.webview.html = getWordWebviewHtml(this.context, data);
+                }
+
+               
             },
             translate: () => {
                 

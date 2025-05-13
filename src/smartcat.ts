@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { window } from 'vscode';
 import * as https from 'https';
-import { showError } from './service';
+import { showError } from './editCode';
 const langMap = {
   en: 'en-us',
   ja: 'ja-jp',

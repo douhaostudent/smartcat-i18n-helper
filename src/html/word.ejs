@@ -171,12 +171,14 @@
         <td class="<%=item.isConsole ? 'warning-text' : 'success-text'%>" data-id="<%=item.isConsole%>">
           <%=item.isConsole ? '是' : '否'%>
         </td>
-        <td class="<%=item.needUpdate ? 'warning-text' : 'success-text'%>" data-id="<%=item.needUpdate%>">
+        <td class="<%=item.needUpdate ?'success-text': 'warning-text'  %>" data-id="<%=item.needUpdate%>">
           <%=item.needUpdate ? '是' : '否'%>
         </td>
         <td style="text-align: center;">
           <a data-id="<%=item.id%>" class='delete'>删除<a />
+            <% if(!item.needUpdate){ %>
           <a data-id="<%=item.id%>" class="update">更新<a />
+            <% } %>
         </td>
       </tr>
       <% }); %>
@@ -195,6 +197,10 @@
       } else if(target.nodeName === 'A' && target.className === 'update'){
         const id = target.getAttribute('data-id');
         window.words = window.words.map(o => o.id === id ? {...o,needUpdate:true}:o);
+        vscode.postMessage({
+        data: window.words,
+        type: "update",
+       });
       }
       else if (target.nodeName === 'TD' && target.className === 'name') {
         const id = target.getAttribute('data-id');
@@ -207,12 +213,12 @@
       }
     }
 
-    function update() {
-      vscode.postMessage({
-        data: window.words,
-        type: "update",
-      });
-    }
+    // function update() {
+    //   vscode.postMessage({
+    //     data: window.words,
+    //     type: "update",
+    //   });
+    // }
 
     function translate() {
       vscode.postMessage({
