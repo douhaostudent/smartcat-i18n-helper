@@ -237,7 +237,7 @@
 
     function save() {
       vscode.postMessage({
-        data: window.words.filter(item=>!item.isRepetitionKey),
+        data: window.words.filter(item=>!item.isRepetitionKey||item.needUpdate),
         type: "save",
       });
     }

@@ -45,8 +45,16 @@ import { Words } from './interface';
       window.showWarningMessage(`${lang.localeFileName}文件不存在，已为您自动生成。`);
       fs.writeFileSync(fullFilePath, 'export default {}');
     } 
+    //需要更新的字段翻译
+    const updateWords = data.filter(item=>item.needUpdate).reduce((prev:{key:string,value:string}[],item:any)=>{
+      prev.push({
+        key: item.key,
+        value: item[lang.langType]?.value,
+      });
+      return prev;
+    },[]);
     // smart拉取新增的key,与当前本地key重复的,filter
-    const newWords = data.filter(item=>!item?.isRepetitionKey).reduce((prev: { key: string, value: string}[], item: any) => {
+    const newWords = data.filter(item=>!item?.isRepetitionKey&& !item.needUpdate).reduce((prev: { key: string, value: string}[], item: any) => {
         
       if (!item[lang.langType]?.exists && !prev.some(o => o.key === item.key)) {  
         prev.push({
@@ -62,10 +70,20 @@ import { Words } from './interface';
     const ast = parse(fileContent, { sourceType: "module" });  
      // 遍历到对象表达式时，动态添加新属性  添加前检查 key 唯一性
     const visitor: any = {
+      // 更新属性
+      ObjectProperty(nodePath:any) {
+        updateWords.forEach(item=>{
+          if(item.key === nodePath.node.key.name){
+            nodePath.node.value.value = item.value;
+          }
+        });
+      },
        
       ObjectExpression(nodePath: any) {
+         // 仅处理顶层对象 ,不然子对象也会依次追加属性，比如seo.title
+      if (!t.isProgram(nodePath.parentPath.parent)) {return;}
         const { node } = nodePath;
-
+         // 追加新的属性
         node.properties.push(
           ...newWords.map((word) => {
             return t.objectProperty(
@@ -90,7 +108,7 @@ import { Words } from './interface';
         parser: 'babel',
         printWidth: 200,          // 单行最大长度（避免对象被拆分成多行）
         singleQuote: true,        // 使用单引号
-        semi: false,              // 不加分号
+        // semi: false,              // 不加分号
         trailingComma: "es5",    // es5语法尾随逗号
         proseWrap: "never"        // 禁止 Markdown 自动换行（对 JS 对象也有效）
       

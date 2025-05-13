@@ -160,6 +160,7 @@
     <tr>
       <th>字符串</th>
       <th>console中文</th>
+      <th>是否更新</th>
       <th style="width: 100px;">操作</th>
     </tr>
     <% words.forEach(function (item, index) { %>
@@ -170,8 +171,12 @@
         <td class="<%=item.isConsole ? 'warning-text' : 'success-text'%>" data-id="<%=item.isConsole%>">
           <%=item.isConsole ? '是' : '否'%>
         </td>
+        <td class="<%=item.needUpdate ? 'warning-text' : 'success-text'%>" data-id="<%=item.needUpdate%>">
+          <%=item.needUpdate ? '是' : '否'%>
+        </td>
         <td style="text-align: center;">
           <a data-id="<%=item.id%>" class='delete'>删除<a />
+          <a data-id="<%=item.id%>" class="update">更新<a />
         </td>
       </tr>
       <% }); %>
@@ -182,15 +187,16 @@
       const { target } = e;
 
       if (target.nodeName === 'A' && target.className === 'delete') {
-
-
         const id = target.getAttribute('data-id');
-
         const tr = document.querySelector(`tr#tr_${id}`);
         tr.remove();
 
         window.words = window.words.filter(o => o.id !== id);
-      } else if (target.nodeName === 'TD' && target.className === 'name') {
+      } else if(target.nodeName === 'A' && target.className === 'update'){
+        const id = target.getAttribute('data-id');
+        window.words = window.words.map(o => o.id === id ? {...o,needUpdate:true}:o);
+      }
+      else if (target.nodeName === 'TD' && target.className === 'name') {
         const id = target.getAttribute('data-id');
         const rowData = window.words.find(o => o.id === id);
 
@@ -199,6 +205,13 @@
           type: "open",
         });
       }
+    }
+
+    function update() {
+      vscode.postMessage({
+        data: window.words,
+        type: "update",
+      });
     }
 
     function translate() {

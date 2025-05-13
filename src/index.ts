@@ -7,6 +7,7 @@ import traverse from '@babel/traverse';
 import type { ParseError, ParseResult } from "@babel/parser";
 import type { File } from '@babel/types';
 import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './service';
+import { saveFormatKeyToLocalFile } from "./feature";
 import type { ExtensionContext, Uri, WebviewPanel } from "vscode";
 import { getFilesByFileType } from './utils';
 import { getValue, sleep, showError } from "./service";
@@ -40,7 +41,9 @@ export interface Words {
     key?: string;
     id: string;
     [k: string]: any;
+    needUpdate:boolean;
 }
+ export type ComponentType = 'client' | 'ssr'
 
 export default class SmartI18nHelper {
     context: ExtensionContext;
@@ -50,13 +53,14 @@ export default class SmartI18nHelper {
     localesPath: string = '';  //翻译文件所在文件夹的路径    ====== "/Users/wangjinli/code/ssr-web-snappass-ai/script"
     importCode: string = '';  //导入国际化的语句
     hookCode: string = '';  //调用useTranslate获取的值 t
+    componentType:  ComponentType = 'ssr';   // ssr上下文
     fileType: string = '';   //翻译文件类型
     fileContent: string = '';  //当前tsx文件的字符串
     methodName: string = '';  // 导入方法
     localesFullPath: string = '';
-    words: Words[] = [];
+    words: Words[] = [];//需要更新的中文翻译
     translateWords: Words[] = [];
-    hasTranslateWordsSet:Set<string> = new Set();  // 默认中文反查的key集合  采用map,查找时间复杂度o(1)
+    hasTranslateWordsSet: Set<string> = new Set();  // 默认中文反查的key集合  采用map,查找时间复杂度o(1)
     languages: Language[] = [];  //支持的语言 遍历一个文件本地
     ast: ParseResult<File> | undefined;
     titleChangeTimer: NodeJS.Timeout | undefined;
@@ -82,6 +86,11 @@ export default class SmartI18nHelper {
             window.showInformationMessage('当前页面无中文，无需翻译');
             return;
         }
+        if (this.ast) {
+            this.componentType = this.detectComponentType(this.ast);
+        }
+
+
         // 将需要翻译的中文列举出来
         this.openWordsPage();
 
@@ -125,6 +134,7 @@ export default class SmartI18nHelper {
                 sourceType: 'module', // es module
                 plugins: [
                     "jsx",
+                    "asyncGenerators", // 支持 async/await 和异步生成器
                     [
                         "decorators",
                         {
@@ -244,12 +254,13 @@ export default class SmartI18nHelper {
                     const isTranslated = this.isWrappedBytFunction(path);
                     const isConsole = this.isWrappedByConsole(path);
                     words.push({
-                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`, //id 必须唯一,删除是以id 维度
+                        id: `${path.node.loc.start.line}${path.node.loc.start.end}`, //id 必须唯一,删除是以id 维度
                         value: path.node.value,
                         loc: path.node.loc,
                         isJsxAttr: path.parent.type === "JSXAttribute",
                         isTranslated: isTranslated,
                         isConsole: isConsole,
+                        needUpdate:false,
                     });
                 }
             },
@@ -259,7 +270,7 @@ export default class SmartI18nHelper {
                     const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
-                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`,  //  todo,id需要是唯一的key 不能有空格
+                        id: `${path.node.loc.start.line}${path.node.loc.start.end}`,  //  todo,id需要是唯一的key 不能有空格
                         value: val,
                         loc: path.node.loc,
                         isJsxAttr: true,
@@ -267,6 +278,7 @@ export default class SmartI18nHelper {
                         rawValue: path.node.value,
                         isTranslated: isTranslated,
                         isConsole: isConsole, //默认jsx无console
+                        needUpdate:false,
                     });
                 }
             },
@@ -276,12 +288,13 @@ export default class SmartI18nHelper {
                     const isConsole = this.isWrappedByConsole(path);
                     const val = path.node.value.raw.replace(/\n/g, '').trim();
                     words.push({
-                        id: `${path.node.value.replace(/[^\u4e00-\u9fa5]/g, '')}${path.node.loc.start.line}${path.node.loc.start.end}`,  
+                        id: `${path.node.loc.start.line}${path.node.loc.start.end}`,
                         value: val,
                         loc: path.node.loc,
                         isTemplate: true,
                         isTranslated: isTranslated,
-                        isConsole: isConsole
+                        isConsole: isConsole,
+                        needUpdate:false,
                     });
                 }
             }
@@ -290,6 +303,64 @@ export default class SmartI18nHelper {
         return words;
     }
 
+    /**
+     * 通过分析ast分析当前组件类型
+     * @param ast  
+     */
+    detectComponentType(ast: ParseResult<File>): ComponentType {
+        let isSSR = false;
+        let isClient = false;
+        if (ast) {
+            traverse(ast, {
+                'DirectiveLiteral': (path: any) => {
+                    if (path.node.value === 'use client') {
+                        isClient = true;
+                        path.stop(); // 找到任意一个即可终止遍历
+
+                    }
+                    if (path.node.value === 'use server') {
+                        isSSR = true;
+                        path.stop(); // 找到任意一个即可终止遍历
+                    }
+
+                },
+                'CallExpression': (path: any) => {
+                    const callee = path.node.callee;
+                    if (t.isIdentifier(callee)) {
+                        const hookNames = ['useState', 'useEffect', 'useLayoutEffect', 'useRef'];
+                        if (hookNames.includes(callee.name)) {
+                            isClient = true;
+                            path.stop(); // 找到任意一个即可终止遍历
+                        }
+                    }
+
+                },
+                // 检测浏览器 API
+                'MemberExpression': (path: any) => {
+                    if (
+                        t.isIdentifier(path.node.object, { name: 'window' }) ||
+                        t.isIdentifier(path.node.object, { name: 'document' })
+                    ) {
+                        isClient = true;
+                        path.stop();
+                    }
+                },
+                'JSXAttribute': (path: any) => {
+                    if (
+                        t.isJSXIdentifier(path.node.name, { name: 'onClick' }) ||
+                        t.isJSXIdentifier(path.node.name, { name: 'onChange' })
+                    ) {
+                        isClient = true;
+                        path.stop(); // 找到任意一个即可终止遍历
+
+                    }
+
+                }
+            });
+
+        }
+        return isClient ? 'client' : 'ssr';
+    }
 
     /**
      *  获取fileContent中文的中文字符串
@@ -352,27 +423,28 @@ export default class SmartI18nHelper {
         defalutLanguage: Language, data: Words[]
     ): Promise<Words[]> {
         const defaultWords = getLocalWordsByFileName(defalutLanguage.localeFileName, true, this);
-    //  以英文key 为唯一标识，暂不考虑中文重复的case
-        Object.entries(defaultWords).forEach(([key,value])=>{
+        //  以英文key 为唯一标识，暂不考虑中文重复的case
+        Object.entries(defaultWords).forEach(([key, value]) => {
             this.hasTranslateWordsSet.add(value as string);
         });
         let needSmartCatTranslateWords: Words[] = [];  //中文【首页】
         let hasTranslatedWords: Words[] = [];
         data.forEach((item: any) => {
-            if (defaultWords[item.value]) {
+            
+            if (defaultWords[item.value] && !item.needUpdate) {
                 item.key = defaultWords[item.value];
-                item.isRepetitionKey= false; //本地已有的翻译 对象，不会有重复的key ,无需判断
+                item.isRepetitionKey = false; //本地已有的翻译 对象，不会有重复的key ,无需判断
                 item[DEFAULT_LANG_TYPE] = {
                     exists: true,
                     value: item.value,
                 };
                 hasTranslatedWords.push(item);
             } else {
-                //需要smart翻译的key需要拉取翻译，再赋值
+                //需要smart翻译的key需要拉取翻译，再赋值   [没有翻译]【需要更新】的合集
                 item[DEFAULT_LANG_TYPE] = {
                     exists: false,
                     // value: item.value,
-                    value:'',
+                    value: '',
                 };
                 needSmartCatTranslateWords.push(item);
             }
@@ -398,34 +470,34 @@ export default class SmartI18nHelper {
             for (let i = 0; i < toTranslateLanguages.length; i += 1) {
                 const lang = toTranslateLanguages[i];
                 smartcatResult = allLangSmartcatResult.length && allLangSmartcatResult.find((item: any) => item && item.langType === lang.langType).result;
-                needSmartCatTranslateWords.forEach((item: Words,index) => {
+                needSmartCatTranslateWords.forEach((item: Words, index) => {
                     //需要给新追加赋值key     
                     if (item[DEFAULT_LANG_TYPE].exists === false) {
                         const defaultLangTypeTransResult = allLangSmartcatResult.length && allLangSmartcatResult.find((item: any) => item && item.langType === DEFAULT_LANG_TYPE).result;
                         const key = Object.entries(defaultLangTypeTransResult).find(([k, v]) => v === item.value)?.[0];   //标准中文翻译ts对象中返查key
                         if (key) {
                             item.key = key;
-                            item.isRepetitionKey= this.hasTranslateWordsSet.has(key);
+                            item.isRepetitionKey = this.hasTranslateWordsSet.has(key);
                             // 基准文件zh-Hans 追加合并smart远程数据
-                            defaultWords[key!] = defaultLangTypeTransResult[key!];
+                            defaultWords[key] = defaultLangTypeTransResult[key];
                             // 合并 ------ 将远程拉取的翻译与现有的翻译文件 ,只合并当前翻译的key,value
                             //   smartcatResult[key!];
                             // 基准文件合并后，同步相应的数据       
-                            // item[DEFAULT_LANG_TYPE] = {
-                            //     exists: false,
-                            //     value: defaultWords[key!],
-                            // };
+                            item[DEFAULT_LANG_TYPE] = {
+                                exists: false,
+                                value: defaultLangTypeTransResult[key],
+                            };
                             // 需要翻译的语言文件合并后，同步相应的数据
                             item[lang.langType] = {
                                 exists: false,
-                                value: smartcatResult[key!] || 'smart无对对应的翻译',
+                                value: smartcatResult[key!],
                             };
                         } else {
                             //smart 远程没有相应的key翻译
-                            const tempKey  = `no-translate-word${index}`;
+                            const tempKey = `no-translate-word${index}`;
                             item.key = tempKey;
-                            item.isRepetitionKey=true;
-                            defaultWords[tempKey!] = '暂无翻译';            
+                            item.isRepetitionKey = true;
+                            defaultWords[tempKey!] = '暂无翻译';
                             // 需要翻译的语言文件合并后，同步相应的数据
                             item[lang.langType] = {
                                 exists: false,
@@ -513,15 +585,23 @@ export default class SmartI18nHelper {
                 this.skipAndSelectWords(data as Words);
             },
             translate: () => {
+                
                 this.translate(data as Words[]);
             },
             save: async () => {
-                await window.showTextDocument(this.currentTextDocumentFileUri!);
-                saveToLocalFile(data as Words[], this);  //   每个翻译文件语言追加
-                await this.replaceEditorText();
-                // 自动导入和翻译hook的调用，后续追加
-                // await this.importMethod();
-                this.webviewPanel?.dispose();
+                //保存-最后阶段是层层过滤后的需要更换的word
+                if (!data.length) {
+                    this.webviewPanel?.dispose();
+                } else {
+                    await window.showTextDocument(this.currentTextDocumentFileUri!);
+                    saveToLocalFile(data as Words[], this);  //   每个翻译文件语言追加
+                    await this.replaceEditorText(data as Words[]);
+                    // 自动导入和翻译hook的调用，后续追加
+                    // await this.importMethod();
+                    this.webviewPanel?.dispose();
+
+                }
+
             },
         };
 
@@ -567,10 +647,10 @@ export default class SmartI18nHelper {
             });
         }
     }
-    async replaceEditorText(): Promise<void> {
+    async replaceEditorText(data: Words[]): Promise<void> {
+        // 过滤从smartkey 新拉取的重复key 要保持key的唯一性  
         await window?.activeTextEditor?.edit(editBuilder => {
-            // 过滤从smartkey 新拉取的重复key 要保持key的唯一性 
-            this.translateWords?.filter(item=>!item.isRepetitionKey).forEach((element) => {
+            data.forEach((element) => {
                 const { loc } = element;
                 const startPosition = new Position(loc.start.line - 1, loc.start.column);
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);

@@ -1,14 +1,15 @@
-import { ExtensionContext } from 'vscode';
+import { commands, ExtensionContext } from 'vscode';
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as ejs from 'ejs';
+import type { ComponentType } from '..';
 
 import { Language, Words } from '../interface';
 
 export const getWordWebviewHtml = (
   context: ExtensionContext,
-  words: Words[]
+  words: Words[],
 ) => {
   let html = fs.readFileSync(
     path.join(
