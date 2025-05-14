@@ -7,7 +7,7 @@ import traverse from '@babel/traverse';
 import type { ParseError, ParseResult } from "@babel/parser";
 import type { File } from '@babel/types';
 import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './editCode';
-import { saveFormatKeyToLocalFile } from "./feature";
+// import { saveFormatKeyToLocalFile } from "./feature";
 import type { ExtensionContext, Uri, WebviewPanel } from "vscode";
 import { getFilesByFileType } from './utils';
 import { getValue, sleep, showError } from "./editCode";
@@ -41,9 +41,10 @@ export interface Words {
     key?: string;
     id: string;
     [k: string]: any;
-    needUpdate:boolean;
+    needUpdate: boolean;
+    isInFunction: boolean;  //用来判断拆入hookcode的位置,找到函数声明内的中文
 }
- export type ComponentType = 'client' | 'ssr'
+export type ComponentType = 'client' | 'ssr'
 
 export default class SmartI18nHelper {
     context: ExtensionContext;
@@ -51,12 +52,14 @@ export default class SmartI18nHelper {
     webviewPanel: WebviewPanel | undefined;  //新开的vscode页面
     projectRootPath: string | undefined = '';    //项目根路径  ===== "/Users/wangjinli/code/ssr-web-snappass-ai"
     localesPath: string = '';  //翻译文件所在文件夹的路径    ====== "/Users/wangjinli/code/ssr-web-snappass-ai/script"
-    importCode: string = '';  //导入国际化的语句
+    clientImportCode: string = ''; // 客户端导入国际化语句
+    ssrImportCode: string = '';    // ssr导入国际化语句
+    ssrHookCode:string = '';
     hookCode: string = '';  //调用useTranslate获取的值 t
-    componentType:  ComponentType = 'ssr';   // ssr上下文
+    componentType: ComponentType = 'ssr';   // ssr上下文
     fileType: string = '';   //翻译文件类型
     fileContent: string = '';  //当前tsx文件的字符串
-    methodName: string = '';  // 导入方法
+    methodName: string = '';  // 包裹方法t
     localesFullPath: string = '';
     words: Words[] = [];//需要更新的中文翻译
     translateWords: Words[] = [];
@@ -117,8 +120,10 @@ export default class SmartI18nHelper {
         if (!this.localesPath) {
             window.showErrorMessage("请先设置存在国际化文件的文件夹地址。");
         }
-        this.importCode = workspace.getConfiguration().get('smart-i18n-helper.Import Code') as string || this.importCode;
+        this.clientImportCode = workspace.getConfiguration().get('smart-i18n-helper.Client Import Code') as string || this.clientImportCode;
+        this.ssrImportCode = workspace.getConfiguration().get('smart-i18n-helper.SSR Import Code') as string || this.ssrImportCode;
         this.hookCode = workspace.getConfiguration().get('smart-i18n-helper.Hook Code') as string || this.hookCode;
+        this.ssrHookCode  = workspace.getConfiguration().get('smart-i18n-helper.SSR Hook Code') as string || this.ssrHookCode;
         this.methodName = workspace.getConfiguration().get('smart-i18n-helper.Method Name') as string || this.methodName;
         this.fileType = workspace.getConfiguration().get('smart-i18n-helper.File Type') as string || this.fileType;
         return !!this.localesPath;
@@ -242,6 +247,29 @@ export default class SmartI18nHelper {
         return false;
     }
 
+
+
+    /**
+     * 
+     * @param  判断节点是否在函数声明内
+     * @returns 
+     */
+    isInsideFunctionDeclaration(nodePath: any) {
+        let currentPath = nodePath.parentPath;
+        while (currentPath) {
+            if (
+                currentPath.isFunctionDeclaration() ||
+                currentPath.isArrowFunctionExpression() ||
+                currentPath.isFunctionExpression()
+            ) {
+                return true; // 命中函数节点
+            }
+            currentPath = currentPath.parentPath; // 向上查找
+        }
+        return false; // 未找到函数节点
+    }
+
+
     /**
      *  通过ast 获取中文words
      */
@@ -253,6 +281,7 @@ export default class SmartI18nHelper {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
                     const isTranslated = this.isWrappedBytFunction(path);
                     const isConsole = this.isWrappedByConsole(path);
+                    const isInFunction = this.isInsideFunctionDeclaration(path);
                     words.push({
                         id: `${path.node.loc.start.line}${path.node.loc.start.end}`, //id 必须唯一,删除是以id 维度
                         value: path.node.value,
@@ -260,7 +289,8 @@ export default class SmartI18nHelper {
                         isJsxAttr: path.parent.type === "JSXAttribute",
                         isTranslated: isTranslated,
                         isConsole: isConsole,
-                        needUpdate:false,
+                        needUpdate: false,
+                        isInFunction: isInFunction
                     });
                 }
             },
@@ -268,6 +298,7 @@ export default class SmartI18nHelper {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value)) {
                     const isTranslated = this.isWrappedBytFunction(path);
                     const isConsole = this.isWrappedByConsole(path);
+                    const isInFunction = this.isInsideFunctionDeclaration(path);
                     const val = path.node.value.replace(/\n/g, '').trim();
                     words.push({
                         id: `${path.node.loc.start.line}${path.node.loc.start.end}`,  //  todo,id需要是唯一的key 不能有空格
@@ -278,7 +309,8 @@ export default class SmartI18nHelper {
                         rawValue: path.node.value,
                         isTranslated: isTranslated,
                         isConsole: isConsole, //默认jsx无console
-                        needUpdate:false,
+                        needUpdate: false,
+                        isInFunction: isInFunction
                     });
                 }
             },
@@ -286,7 +318,9 @@ export default class SmartI18nHelper {
                 if (/[\u4e00-\u9fa5]/.test(path.node.value.raw)) {
                     const isTranslated = this.isWrappedBytFunction(path);
                     const isConsole = this.isWrappedByConsole(path);
+                    const isInFunction = this.isInsideFunctionDeclaration(path);
                     const val = path.node.value.raw.replace(/\n/g, '').trim();
+
                     words.push({
                         id: `${path.node.loc.start.line}${path.node.loc.start.end}`,
                         value: val,
@@ -294,7 +328,8 @@ export default class SmartI18nHelper {
                         isTemplate: true,
                         isTranslated: isTranslated,
                         isConsole: isConsole,
-                        needUpdate:false,
+                        needUpdate: false,
+                        isInFunction: isInFunction
                     });
                 }
             }
@@ -308,7 +343,6 @@ export default class SmartI18nHelper {
      * @param ast  
      */
     detectComponentType(ast: ParseResult<File>): ComponentType {
-        let isSSR = false;
         let isClient = false;
         if (ast) {
             traverse(ast, {
@@ -318,10 +352,10 @@ export default class SmartI18nHelper {
                         path.stop(); // 找到任意一个即可终止遍历
 
                     }
-                    if (path.node.value === 'use server') {
-                        isSSR = true;
-                        path.stop(); // 找到任意一个即可终止遍历
-                    }
+                    // if (path.node.value === 'use server') {
+                    //     isSSR = true;
+                    //     path.stop(); // 找到任意一个即可终止遍历
+                    // }
 
                 },
                 'CallExpression': (path: any) => {
@@ -430,7 +464,7 @@ export default class SmartI18nHelper {
         let needSmartCatTranslateWords: Words[] = [];  //中文【首页】
         let hasTranslatedWords: Words[] = [];
         data.forEach((item: any) => {
-            
+
             if (defaultWords[item.value] && !item.needUpdate) {
                 item.key = defaultWords[item.value];
                 item.isRepetitionKey = false; //本地已有的翻译 对象，不会有重复的key ,无需判断
@@ -570,7 +604,7 @@ export default class SmartI18nHelper {
             }
 
             this.webviewPanel.title = '翻译';
-            this.webviewPanel.webview.html = getTranslateWebviewHtml(this.context, this.translateWords, this.languages);
+            this.webviewPanel.webview.html = getTranslateWebviewHtml(this.context, this.translateWords, this.languages,this.componentType);
         }
     }
 
@@ -584,15 +618,13 @@ export default class SmartI18nHelper {
             open: () => {
                 this.skipAndSelectWords(data as Words);
             },
-            update:()=>{
-                if(this.webviewPanel){
+            update: () => {
+                if (this.webviewPanel) {
                     this.webviewPanel.webview.html = getWordWebviewHtml(this.context, data);
                 }
-
-               
             },
             translate: () => {
-                
+
                 this.translate(data as Words[]);
             },
             save: async () => {
@@ -604,7 +636,11 @@ export default class SmartI18nHelper {
                     saveToLocalFile(data as Words[], this);  //   每个翻译文件语言追加
                     await this.replaceEditorText(data as Words[]);
                     // 自动导入和翻译hook的调用，后续追加
-                    // await this.importMethod();
+                    const allIsConfigWord = this.words.every(item=>!item.isInFunction);
+                    if(!allIsConfigWord) {
+                        await this.importMethod();
+                        await this.insertHookCode();
+                    } 
                     this.webviewPanel?.dispose();
 
                 }
@@ -627,19 +663,32 @@ export default class SmartI18nHelper {
     // 是编辑器 API 提供的方法，用于在指定位置插入内容。
 
     async importMethod(): Promise<void> {
+  
         let isImported = false;
+        let hasImports = false; //是否有import 语句标识
+        let firstImportLine = 0;  // 导入的位置就是第一行import 的行数之后，插件使用方，自己使用eslint 去代码格式化
+        const importFunctionNames = ['useTranslations','getTranslations'];    //暂时写死，后续抽离解析
+
 
         const visitor: any = {
 
             ImportDefaultSpecifier: (nodePath: any) => {
-                if (nodePath.node.local.name === this.methodName) {
+                if (!hasImports) {
+                    firstImportLine = nodePath.node.loc.end.line;
+                    hasImports = true;
+                }
+                if (importFunctionNames.includes(nodePath.node.local.name)) {
                     isImported = true;
                     nodePath.stop();
                 }
             },
 
             ImportSpecifier: (nodePath: any) => {
-                if (nodePath.node.local.name === this.methodName) {
+                if (!hasImports) {
+                    firstImportLine = nodePath.node.loc.end.line;
+                    hasImports = true;
+                }
+                if (importFunctionNames.includes(nodePath.node.local.name)) {
                     isImported = true;
                     nodePath.stop();  // 立即终止当前 AST 的遍历​​，避免不必要的后续检查
                 }
@@ -649,10 +698,58 @@ export default class SmartI18nHelper {
         traverse(this.ast as ParseResult<File>, visitor);
         if (!isImported) {
             await window?.activeTextEditor?.edit(editBuilder => {
-
-                editBuilder.insert(new Position(0, 0), this.importCode);
+                const shouldImportCode = this.componentType === 'client' ? this.clientImportCode : this.ssrImportCode;
+                editBuilder.insert(new Position(firstImportLine, 0), shouldImportCode);
             });
         }
+    }
+
+    /**
+     * 增加hook调用
+     */
+    async insertHookCode(): Promise<void> {
+        let hasHookCode = false;
+        let allWordsInSamescope = false;    // 先过滤不在函数声明内的中文
+        let hookStartLine = 0;
+        const visitor: any = {
+            FunctionDeclaration: (nodePath: any) => {
+                const functionBody = nodePath.node.body;
+                const inFunctionWords = this.words.filter(word => word.isInFunction);
+                if(!inFunctionWords?.length)  {return;} 
+                const scopeCode = this.fileContent.slice(functionBody.start, functionBody.end);
+                //  严格通过作用域内去判断 检查是否包含所有目标中文字符   todo:待完善精准判断 
+                allWordsInSamescope = inFunctionWords.every(word =>
+                    scopeCode.includes(word.value)
+                );
+                if (allWordsInSamescope) {
+                    hookStartLine = nodePath.node.loc.start.line + 1; // 获取函数声明起始行号
+                }
+
+            },
+            VariableDeclaration: (nodePath: any) => {
+                if (
+                    nodePath.node.declarations.some(
+                        (decl: any) =>
+                            decl.id.name === 't' &&
+                            decl.init?.type === 'CallExpression' &&
+                            decl.init.callee.name === 'useTranslations'
+                    )
+                ) {
+                    hasHookCode = true;
+                }
+            },
+
+        };
+
+        traverse(this.ast as ParseResult<File>, visitor);
+        if (!hasHookCode) {
+            await window?.activeTextEditor?.edit(editBuilder => {
+                const hookCode = this.componentType === 'client' ? this.hookCode :this.ssrHookCode;
+                // insert 获取函数声明所在行号
+                editBuilder.insert(new Position(hookStartLine, 0), hookCode);
+            });
+        }
+
     }
     async replaceEditorText(data: Words[]): Promise<void> {
         // 过滤从smartkey 新拉取的重复key 要保持key的唯一性  
@@ -663,7 +760,8 @@ export default class SmartI18nHelper {
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);
                 const selection = new Range(startPosition, endPosition);
                 if (!selection) { return; }
-                editBuilder.replace(selection, element.isTranslated ? replaceKey(element) : getValue(element, this));
+                // isInFunction  不被函数作用域包裹的，判断为变量
+                editBuilder.replace(selection, (element.isTranslated || !element.isInFunction) ? replaceKey(element) : getValue(element, this));
             });
 
         });

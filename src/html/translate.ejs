@@ -57,6 +57,10 @@
       padding: 10px 1em;
       cursor: pointer;
     }
+    .compoent-type{
+      margin-right: 16px;
+      color: chartreuse;
+    }
     .error-key {
       color:#ff4d4f;
     }
@@ -173,6 +177,8 @@
 
 <body>
   <div style="text-align: right;margin: 20px auto; width: 96%; font-size: 16px;">
+    <span class="compoent-type">组件类型:<%= componentType %></span>
+    
   <!-- <svg viewBox="64 64 896 896" focusable="false" data-icon="exclamation-circle" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M512 64C264.6 64 64 264.6 64 512s200.6 448 448 448 448-200.6 448-448S759.4 64 512 64zm-32 232c0-4.4 3.6-8 8-8h48c4.4 0 8 3.6 8 8v272c0 4.4-3.6 8-8 8h-48c-4.4 0-8-3.6-8-8V296zm32 440a48.01 48.01 0 010-96 48.01 48.01 0 010 96z"></path></svg> -->
     <span class="save-tip">
       温馨提示：非唯一的key和新增❌的中文，保存时自动忽略~
@@ -184,6 +190,7 @@
       <th>原文</th>
       <th>key</th>
       <th>key唯一</th>
+      <th>更新</th>
       <% languages.forEach(function(item) { %>
         <!-- <th>
           <%= item.langType %>
@@ -204,6 +211,9 @@
         </td>
         <td data-id="<%=item.isRepetitionKey%>" class="<%=item.isRepetitionKey ? 'error-key' : 'success-key'%>">
           <%= item.isRepetitionKey? '否':'是' %>
+        </td>
+        <td data-id="<%=item.isRepetitionKey%>" class="<%=item.needUpdate ? 'success-key' : 'error-key' %>">
+          <%= item.needUpdate? '是':'否' %>
         </td>
         <% languages.forEach(function(lang) { %>
           <!-- <td data-id="<%=item.id%>">

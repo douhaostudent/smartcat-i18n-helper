@@ -33,6 +33,7 @@ export const getTranslateWebviewHtml = (
   context: ExtensionContext,
   translateWords: Words[],
   languages: Language[],
+  componentType:ComponentType
 ) => {
   let html = fs.readFileSync(
     path.join(context.extensionPath, './dist/src/html/translate.ejs')
@@ -40,6 +41,7 @@ export const getTranslateWebviewHtml = (
   html = ejs.render(html, {
     words: translateWords,
     languages: languages,
+    componentType:componentType
   });
   return html;
 };
