@@ -56,13 +56,13 @@
     },
     "commands": [
       {
-        "command": "smart-i18n-helper.helloWorld",
-        "title": "Hello World"
+        "command": "smart-i18n-helper.Smartcat Helper",
+        "title": "Smartcat Helper"
       }
     ],
     "keybindings": [
       {
-        "command": "smart-i18n-helper.helloWorld",
+        "command": "smart-i18n-helper.Smartcat Helper",
         "key": "ctrl+shift+t",
         "mac": "cmd+shift+t",
         "when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact"
@@ -71,7 +71,7 @@
     "menus": {
       "editor/context": [
         {
-          "command": "smart-i18n-helper.helloWorld",
+          "command": "smart-i18n-helper.Smartcat Helper",
           "when": "resourceLangId == javascript || resourceLangId == javascriptreact || resourceLangId == typescript || resourceLangId == typescriptreact",
           "group": "navigation@7"
         }
