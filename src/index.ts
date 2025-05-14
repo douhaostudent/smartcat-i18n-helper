@@ -54,7 +54,7 @@ export default class SmartI18nHelper {
     localesPath: string = '';  //翻译文件所在文件夹的路径    ====== "/Users/wangjinli/code/ssr-web-snappass-ai/script"
     clientImportCode: string = ''; // 客户端导入国际化语句
     ssrImportCode: string = '';    // ssr导入国际化语句
-    ssrHookCode:string = '';
+    ssrHookCode: string = '';
     hookCode: string = '';  //调用useTranslate获取的值 t
     componentType: ComponentType = 'ssr';   // ssr上下文
     fileType: string = '';   //翻译文件类型
@@ -123,7 +123,7 @@ export default class SmartI18nHelper {
         this.clientImportCode = workspace.getConfiguration().get('smart-i18n-helper.Client Import Code') as string || this.clientImportCode;
         this.ssrImportCode = workspace.getConfiguration().get('smart-i18n-helper.SSR Import Code') as string || this.ssrImportCode;
         this.hookCode = workspace.getConfiguration().get('smart-i18n-helper.Hook Code') as string || this.hookCode;
-        this.ssrHookCode  = workspace.getConfiguration().get('smart-i18n-helper.SSR Hook Code') as string || this.ssrHookCode;
+        this.ssrHookCode = workspace.getConfiguration().get('smart-i18n-helper.SSR Hook Code') as string || this.ssrHookCode;
         this.methodName = workspace.getConfiguration().get('smart-i18n-helper.Method Name') as string || this.methodName;
         this.fileType = workspace.getConfiguration().get('smart-i18n-helper.File Type') as string || this.fileType;
         return !!this.localesPath;
@@ -604,7 +604,7 @@ export default class SmartI18nHelper {
             }
 
             this.webviewPanel.title = '翻译';
-            this.webviewPanel.webview.html = getTranslateWebviewHtml(this.context, this.translateWords, this.languages,this.componentType);
+            this.webviewPanel.webview.html = getTranslateWebviewHtml(this.context, this.translateWords, this.languages, this.componentType);
         }
     }
 
@@ -636,11 +636,11 @@ export default class SmartI18nHelper {
                     saveToLocalFile(data as Words[], this);  //   每个翻译文件语言追加
                     await this.replaceEditorText(data as Words[]);
                     // 自动导入和翻译hook的调用，后续追加
-                    const allIsConfigWord = this.words.every(item=>!item.isInFunction);
-                    if(!allIsConfigWord) {
-                        await this.importMethod();
-                        await this.insertHookCode();
-                    } 
+                    const allIsConfigWord = this.words.every(item => !item.isInFunction);
+                    if (!allIsConfigWord) {
+                        const isInsert = await this.importMethod();  //需要返回是否新增，会影响hookcode的行号，新增修改ast,会增加行号
+                        await this.insertHookCode(isInsert);
+                    }
                     this.webviewPanel?.dispose();
 
                 }
@@ -662,12 +662,12 @@ export default class SmartI18nHelper {
     // ​​editBuilder.insert​​
     // 是编辑器 API 提供的方法，用于在指定位置插入内容。
 
-    async importMethod(): Promise<void> {
-  
+    async importMethod(): Promise<boolean> {
+
         let isImported = false;
         let hasImports = false; //是否有import 语句标识
         let firstImportLine = 0;  // 导入的位置就是第一行import 的行数之后，插件使用方，自己使用eslint 去代码格式化
-        const importFunctionNames = ['useTranslations','getTranslations'];    //暂时写死，后续抽离解析
+        const importFunctionNames = ['useTranslations', 'getTranslations'];    //暂时写死，后续抽离解析
 
 
         const visitor: any = {
@@ -700,14 +700,19 @@ export default class SmartI18nHelper {
             await window?.activeTextEditor?.edit(editBuilder => {
                 const shouldImportCode = this.componentType === 'client' ? this.clientImportCode : this.ssrImportCode;
                 editBuilder.insert(new Position(firstImportLine, 0), shouldImportCode);
+
             });
+            return true;
+
+        } else {
+            return false;
         }
     }
 
     /**
      * 增加hook调用
      */
-    async insertHookCode(): Promise<void> {
+    async insertHookCode(isInsertImport:boolean): Promise<void> {
         let hasHookCode = false;
         let allWordsInSamescope = false;    // 先过滤不在函数声明内的中文
         let hookStartLine = 0;
@@ -715,14 +720,14 @@ export default class SmartI18nHelper {
             FunctionDeclaration: (nodePath: any) => {
                 const functionBody = nodePath.node.body;
                 const inFunctionWords = this.words.filter(word => word.isInFunction);
-                if(!inFunctionWords?.length)  {return;} 
+                if (!inFunctionWords?.length) { return; }
                 const scopeCode = this.fileContent.slice(functionBody.start, functionBody.end);
                 //  严格通过作用域内去判断 检查是否包含所有目标中文字符   todo:待完善精准判断 
                 allWordsInSamescope = inFunctionWords.every(word =>
                     scopeCode.includes(word.value)
                 );
                 if (allWordsInSamescope) {
-                    hookStartLine = nodePath.node.loc.start.line + 1; // 获取函数声明起始行号
+                    hookStartLine = isInsertImport ? nodePath.node.body.loc.start.line + 1 : nodePath.node.body.loc.start.line;// 获取函数声明起始行号
                 }
 
             },
@@ -732,7 +737,7 @@ export default class SmartI18nHelper {
                         (decl: any) =>
                             decl.id.name === 't' &&
                             decl.init?.type === 'CallExpression' &&
-                            decl.init.callee.name === 'useTranslations'
+                            (decl.init.callee.name === 'useTranslations' || decl.init.callee.name === 'getTranslations')
                     )
                 ) {
                     hasHookCode = true;
@@ -744,7 +749,7 @@ export default class SmartI18nHelper {
         traverse(this.ast as ParseResult<File>, visitor);
         if (!hasHookCode) {
             await window?.activeTextEditor?.edit(editBuilder => {
-                const hookCode = this.componentType === 'client' ? this.hookCode :this.ssrHookCode;
+                const hookCode = this.componentType === 'client' ? this.hookCode : this.ssrHookCode;
                 // insert 获取函数声明所在行号
                 editBuilder.insert(new Position(hookStartLine, 0), hookCode);
             });

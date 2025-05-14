@@ -20,7 +20,7 @@
         "smart-i18n-helper.Locales Path": {
           "type": "string",
           "description": "翻译文件的文件夹地址",
-          "default": "./src/locales"
+          "default": "/newlocales"
         },
         "smart-i18n-helper.File Type": {
           "type": "string",
