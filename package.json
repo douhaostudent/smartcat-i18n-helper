@@ -3,8 +3,8 @@
   "displayName": "smart-i18n s-helper",
   "description": "",
   "version": "0.0.1",
-  "author": "wangjinli",
-  "publisher": "wangjinli",
+  "author": "wngjnl12601",
+  "publisher": "wngjnl12601",
   "engines": {
     "vscode": "^1.81.0"
   },
@@ -96,7 +96,7 @@
     "@types/ejs": "^3.1.5",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
-    "@types/vscode": "^1.99.0",
+    "@types/vscode": "^1.81.0",
     "@typescript-eslint/eslint-plugin": "^8.28.0",
     "@typescript-eslint/parser": "^8.28.0",
     "@vscode/test-cli": "^0.0.10",
