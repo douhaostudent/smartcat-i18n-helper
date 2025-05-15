@@ -2,9 +2,10 @@
   "name": "smart-i18n-helper",
   "displayName": "smartcat-i18n-helper",
   "description": "",
-  "version": "0.0.1",
-  "author": "wngjnl12601",
+  "version": "0.0.3",
+  "author": "wangjinli",
   "publisher": "wngjnl12601",
+  "icon": "smile.png",
   "engines": {
     "vscode": "^1.81.0"
   },

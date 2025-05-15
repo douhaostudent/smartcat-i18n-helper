@@ -13,45 +13,17 @@ import { getFilesByFileType } from './utils';
 import { getValue, sleep, showError } from "./editCode";
 import * as t from '@babel/types';
 import translateSmartcatLocaleAll from './smartcat';
+import { Words,Language } from "./interface";
 const DEFAULT_LANG_TYPE = 'zh-Hans';
-interface SourceLocation {
-    start: {
-        line: number;
-        column: number;
-    };
-    end: {
-        line: number;
-        column: number;
-    };
-}
 
-export interface Language {
-    langType: string
-    localeFileName: string;
-}
-
-export interface Words {
-    value: string;
-    loc: SourceLocation;
-    isJsxAttr?: boolean;
-    isJsxText?: boolean;
-    isTemplate?: boolean;
-    rawValue?: string;
-    isConsole: boolean;
-    key?: string;
-    id: string;
-    [k: string]: any;
-    needUpdate: boolean;
-    isInFunction: boolean;  //用来判断拆入hookcode的位置,找到函数声明内的中文
-}
 export type ComponentType = 'client' | 'ssr'
 
 export default class SmartI18nHelper {
     context: ExtensionContext;
     currentTextDocumentFileUri: Uri | undefined;
     webviewPanel: WebviewPanel | undefined;  //新开的vscode页面
-    projectRootPath: string | undefined = '';    //项目根路径  ===== "/Users/wangjinli/code/ssr-web-snappass-ai"
-    localesPath: string = '';  //翻译文件所在文件夹的路径    ====== "/Users/wangjinli/code/ssr-web-snappass-ai/script"
+    projectRootPath: string | undefined = '';    //项目根路径  ===== "/Users/wangjinli/code/xxx"
+    localesPath: string = '';  //翻译文件所在文件夹的路径    ====== "/Users/wangjinli/code/xxx/a"
     clientImportCode: string = ''; // 客户端导入国际化语句
     ssrImportCode: string = '';    // ssr导入国际化语句
     ssrHookCode: string = '';
@@ -608,7 +580,10 @@ export default class SmartI18nHelper {
         }
     }
 
-
+/**
+ * 
+ * @param e webview postmessage 事件 
+ */
     didReceiveMessageHandle(
         e: { type: string, data: any }
     ) {
@@ -653,14 +628,10 @@ export default class SmartI18nHelper {
         }
     }
 
-    // 增加导入
-
-    // ​​Position(0, 0)​​
-    // 表示插入位置的行号和列号（从 0 开始计数），这里指文件开头。
-    // ​​this.importCode​​
-    // 是要插入的代码片段，通常是一个字符串（如 import ... 语句）。
-    // ​​editBuilder.insert​​
-    // 是编辑器 API 提供的方法，用于在指定位置插入内容。
+    /**
+     * 增加导入函数语句  编辑器 API 提供的方法，用于在指定位置插入内容。
+     * @returns 
+     */
 
     async importMethod(): Promise<boolean> {
 
@@ -765,7 +736,7 @@ export default class SmartI18nHelper {
                 const endPosition = new Position(loc.end.line - 1, loc.end.column);
                 const selection = new Range(startPosition, endPosition);
                 if (!selection) { return; }
-                // isInFunction  不被函数作用域包裹的，判断为变量
+                // isInFunction  不被函数作用域包裹的，判断为变量   todo 精确判断返回jsx jsx组件内的中文才追加
                 editBuilder.replace(selection, (element.isTranslated || !element.isInFunction) ? replaceKey(element) : getValue(element, this));
             });
 

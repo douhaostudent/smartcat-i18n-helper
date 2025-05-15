@@ -1,17 +1,7 @@
-import * as vscode from 'vscode';
+
 import { window } from 'vscode';
 import * as https from 'https';
 import { showError } from './editCode';
-const langMap = {
-  en: 'en-us',
-  ja: 'ja-jp',
-  ko: 'ko-kr',
-  th: 'th-th',
-  'zh-Hans': 'zh-Hans', // 基准中文映射
-  'zh-Hant-TW': 'zh-tw', // 此处台湾的语言需要映射三种  'zh-hk', 'zh-mo'
-  'pt-BR': 'pt-br',
-  'es-MX': 'es-mx',
-};
 
 const PROJECTID_OPTIONS = {
   ko: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
