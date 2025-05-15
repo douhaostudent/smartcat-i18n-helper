@@ -9,6 +9,16 @@
   "engines": {
     "vscode": "^1.81.0"
   },
+  "keywords": [
+		"react",
+		"i18n",
+		"i18n-helper",
+		"translate"
+	],
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/douhaostudent/smartcat-i18n-helper"
+	},
   "categories": [
     "Other"
   ],
