@@ -16,10 +16,11 @@ interface TransFileMes{
     async function walkDir(currentPath: string) {
         try {
             const items = await fs.readdir(currentPath);
-            
             for (const item of items) {
                 const fullPath = path.join(currentPath, item);
                 const stat = await fs.stat(fullPath);
+
+                console.log(path.extname(item).toLowerCase(),"stat");
 
                 if (stat.isDirectory()) {
                     await walkDir(fullPath); // 递归子目录
@@ -31,7 +32,7 @@ interface TransFileMes{
             console.error(`访问目录出错: ${currentPath}`, error);
         }
     }
-
+    
     await walkDir(folderPath);
     return files;
 }

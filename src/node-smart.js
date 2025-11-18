@@ -1,54 +1,30 @@
-// import * as vscode from 'vscode';
-// import { window } from 'vscode';
-// import * as https from 'https';
 const https = require('https');
-function showError(errorText) {
-  if (errorText) {
-    vscode.window.showErrorMessage(errorText);
-  }
-}
-const langMap = {
-  en: 'en-us',
-  ja: 'ja-jp',
-  ko: 'ko-kr',
-  th: 'th-th',
-  'zh-Hans': 'zh-Hans', // 基准中文映射
-  'zh-Hant-TW': 'zh-tw', // 此处台湾的语言需要映射三种  'zh-hk', 'zh-mo'
-  'pt-BR': 'pt-br',
-  'es-MX': 'es-mx',
+const fs  = require('fs');
+const PROJECTID_OPTIONS = {
+  'zh-Hans': 'f2415fe0-3af5-4700-909a-b823622841b9',
+  'en': 'f2415fe0-3af5-4700-909a-b823622841b9',
+  'pt-BR': '77f61328-394f-448f-9fb8-cb099c7937bb'
 };
 
-const PROJECTID_OPTIONS = {
-  ko: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  ja: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  'pt-BR': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  'es-MX': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  en: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  th: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  'zh-Hant-TW': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  'zh-Hans': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-};
-const WORKSPACE = 'c518c8a5-4ddd-4fad-81a8-b63687308427';
-const APITOKEN = '33_hT9imd7M4JRMtCWBQzfLpBnQZ';
+
+/**
+ * 显示错误信息
+ */
+function showError(message) {
+  vscode.window.showErrorMessage(message);
+}
 
 /**
  * 获取授权Header
- * @return {*}
  */
 function getAuthorization() {
-  const buffer = Buffer.from(`${WORKSPACE}:${APITOKEN}`);
-  const base64Str = buffer.toString('base64');
-  return `Basic ${base64Str}`;
+  return `Basic ${Buffer.from('c518c8a5-4ddd-4fad-81a8-b63687308427:40_LmGxTD30izpU7fSRrOrSD6ApO', 'utf-8').toString('base64')}`;
 }
-
 
 /**
  * 获取任务ID
- * @param {*} lang
- * @return {*}
  */
-
-function getTaskId(lang){
+function getTaskId(lang) {
   return new Promise((resolve, reject) => {
     console.log(`获取${lang}的taskId中...`);
     const projectId = PROJECTID_OPTIONS[lang];
@@ -71,7 +47,7 @@ function getTaskId(lang){
         try {
           const parsedData = JSON.parse(data);
           console.log(`taskId获取成功：${parsedData}`);
-          resolve(parsedData) ;
+          resolve(parsedData);
         } catch (error) {
           reject(error);
         }
@@ -106,18 +82,22 @@ function getLanguageResult(taskId, lang) {
 
         // 200 表示下载完成
         if (res.statusCode === 200) {
+          console.log(`smartcat翻译成功：${lang}`);
           let data = '';
           res.setEncoding('utf8');
           res.on('data', (chunk) => { data += chunk; });
           res.on('end', () => {
-            const result = JSON.parse(data);
-            resolve(result);
-            if (result.error_code) {
-              showError(`翻译出错：${result.error_msg}`);
-              reject();
+            try {
+              const result = JSON.parse(data);
+              resolve(result);
+              
+            } catch (error) {
+              showError(`解析翻译结果出错：${error}`);
+              reject(error);
             }
-
           });
+        } else {
+          reject(new Error(`HTTP ${res.statusCode}`));
         }
       }
     );
@@ -125,51 +105,52 @@ function getLanguageResult(taskId, lang) {
     request.on('error', (error) => {
       showError('翻译出错，请稍后重试。');
       console.log(error, "smartcat 翻译错误");
-      reject();
+      reject(error);
     });
-    request.end();
   });
 }
 
-async function initExport(lang) {
+async function initExport(lang, localLang) {
   try {
     const taskId = await getTaskId(lang);
     const translatesRes = await getLanguageResult(taskId, lang);
-    const formatKeyTranslates = {};
-    Object.keys(translatesRes).forEach(key => {
-      const newKey = key.replaceAll('.', '_'); // 替换所有 . 为 _
-      formatKeyTranslates[newKey] = translatesRes[key];
-    });
-    //  文件名映射
-    return formatKeyTranslates;
+    // const formatKeyTranslates = {};
+    // Object.keys(translatesRes).forEach(key => {
+    //   const newKey = key.replaceAll('.', '_'); // 替换所有 . 为 _
+    //   formatKeyTranslates[newKey] = translatesRes[key];
+    // });
+    // fs.writeFile(localLang,translatesRes,'utf-8');
+    return { langType: localLang, result:translatesRes };
   } catch (error) {
     console.log('init error', error);
+    throw error;
   }
 }
 
-
-//    翻译文件的langType
-async function translateSmartcatLocale(langType) {
+/**
+ * 主函数 - 翻译所有语言
+ */
+async function translateSmartcatLocaleAll() {
   try {
-      const  getSmartLangTypeMap = {
-      'en-us':'en',
-      'ja-jp':'ja',
-      'ko-kr':'ko',
-      'th-th':'th',
-      'zh-Hans': 'zh-Hans', // 基准中文映射
-      'zh-tw': 'zh-Hant-TW',// 此处台湾的语言需要映射三种  'zh-hk', 'zh-mo'
-      'zh-hk':'zh-Hant-TW',
-      'zh-mo':'zh-Hant-TW',
-      'pt-br': 'pt-BR',
-      'es-mx':'es-MX',
+    const getSmartLangTypeMap = {
+      'en': 'en',
+      'pt': 'pt-BR',
+      'zh': 'zh-Hans',
     };
-    const promises = Object.keys(getSmartLangTypeMap).map((key)=> initExport(getSmartLangTypeMap[key]));
-    const result  = await Promise.all(promises);
-    return  result;
-  } catch (error) { 
-    window.showWarningMessage('smartcat拉取翻译失败,请重试');
+
+    const promises = Object.keys(getSmartLangTypeMap).map((key) => 
+      initExport(getSmartLangTypeMap[key], key)
+    );
+    const result = await Promise.all(promises);
+    console.log('smartcat翻译拉取成功！');
+    return result;
+  } catch (error) {
     console.log('smartcat拉取翻译失败', error);
+    return [];
   }
 }
-// 本地调试需要把export es语法移除
-translateSmartcatLocale('ja-jp');
+
+
+
+
+translateSmartcatLocaleAll();

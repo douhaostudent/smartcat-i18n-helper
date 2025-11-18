@@ -31,7 +31,7 @@
         "smart-i18n-helper.Locales Path": {
           "type": "string",
           "description": "翻译文件的文件夹地址",
-          "default": "/newlocales"
+          "default": "/packages/roboneo-sdk/src/locales"
         },
         "smart-i18n-helper.File Type": {
           "type": "string",
@@ -62,7 +62,24 @@
           "type": "string",
           "description": "方法名",
           "default": "t"
+        },
+        "smart-i18n-helper.Custom Import Code": {
+          "type": "string",
+          "description": "导入自定义国际化方法的代码",
+          "default": "import { useLanguageStore } from '$/store/languageStore';\n"
+        },
+        "smart-i18n-helper.Custom Hook Code": {
+          "type": "string",
+          "description": "调用自定义Hook方法的代码",
+          "default": "const languageStore = useLanguageStore((state) => state.languageStore);\n"
+        },
+        
+        "smart-i18n-helper.Custom Expression Statement": {
+          "type": "string",
+          "description": "自定义的翻译key的callback表达式",
+          "default": "languageStore.smartcatTranslationText((v) => v.key)"
         }
+       
       }
     },
     "commands": [

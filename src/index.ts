@@ -14,9 +14,9 @@ import { getValue, sleep, showError } from "./editCode";
 import * as t from '@babel/types';
 import translateSmartcatLocaleAll from './smartcat';
 import { Words,Language } from "./interface";
-const DEFAULT_LANG_TYPE = 'zh-Hans';
+const DEFAULT_LANG_TYPE = 'zh';
 
-export type ComponentType = 'client' | 'ssr'
+export type ComponentType = 'client' | 'ssr' | 'custom'
 
 export default class SmartI18nHelper {
     context: ExtensionContext;
@@ -29,6 +29,9 @@ export default class SmartI18nHelper {
     ssrHookCode: string = '';
     hookCode: string = '';  //调用useTranslate获取的值 t
     componentType: ComponentType = 'ssr';   // ssr上下文
+    customImportCode:string = '';  //自定义的导入语句
+    customHookCode:string='';  //自定义的hook
+    customExpressionStatement:string='';  //自定义表达式
     fileType: string = '';   //翻译文件类型
     fileContent: string = '';  //当前tsx文件的字符串
     methodName: string = '';  // 包裹方法t
@@ -62,7 +65,7 @@ export default class SmartI18nHelper {
             return;
         }
         if (this.ast) {
-            this.componentType = this.detectComponentType(this.ast);
+            this.componentType =  this.customImportCode ? 'custom': this.detectComponentType(this.ast);
         }
 
 
@@ -71,7 +74,6 @@ export default class SmartI18nHelper {
 
     }
     async getLanguages() {
-
         const transFiles = await getFilesByFileType(this.localesFullPath, this.fileType);
         this.languages = transFiles.map((item) => {
             const fileName = item.fileName.split('.');
@@ -98,6 +100,9 @@ export default class SmartI18nHelper {
         this.ssrHookCode = workspace.getConfiguration().get('smart-i18n-helper.SSR Hook Code') as string || this.ssrHookCode;
         this.methodName = workspace.getConfiguration().get('smart-i18n-helper.Method Name') as string || this.methodName;
         this.fileType = workspace.getConfiguration().get('smart-i18n-helper.File Type') as string || this.fileType;
+        this.customImportCode = workspace.getConfiguration().get('smart-i18n-helper.Custom Import Code')as string || this.customImportCode;
+        this.customHookCode = workspace.getConfiguration().get('smart-i18n-helper.Custom Hook Code')  as string  || this.customHookCode;
+        this.customExpressionStatement =workspace.getConfiguration().get('Custom Expression Statement') as string ||  this.customExpressionStatement;
         return !!this.localesPath;
     }
 
@@ -634,47 +639,45 @@ export default class SmartI18nHelper {
      */
 
     async importMethod(): Promise<boolean> {
-
         let isImported = false;
-        let hasImports = false; //是否有import 语句标识
-        let firstImportLine = 0;  // 导入的位置就是第一行import 的行数之后，插件使用方，自己使用eslint 去代码格式化
-        const importFunctionNames = ['useTranslations', 'getTranslations'];    //暂时写死，后续抽离解析
-
-
+        const importLines: number[] = []; // 收集所有 import 的行号
+        const importFunctionNames = ['useTranslations', 'getTranslations', 'useLanguageStore'];
+    
         const visitor: any = {
-
+            ImportDeclaration: (nodePath: any) => {
+                // 收集每个 import 语句的结束行
+                importLines.push(nodePath.node.loc.end.line);
+            },
+    
             ImportDefaultSpecifier: (nodePath: any) => {
-                if (!hasImports) {
-                    firstImportLine = nodePath.node.loc.end.line;
-                    hasImports = true;
-                }
                 if (importFunctionNames.includes(nodePath.node.local.name)) {
                     isImported = true;
                     nodePath.stop();
                 }
             },
-
+    
             ImportSpecifier: (nodePath: any) => {
-                if (!hasImports) {
-                    firstImportLine = nodePath.node.loc.end.line;
-                    hasImports = true;
-                }
                 if (importFunctionNames.includes(nodePath.node.local.name)) {
                     isImported = true;
-                    nodePath.stop();  // 立即终止当前 AST 的遍历​​，避免不必要的后续检查
+                    nodePath.stop();
                 }
             },
         };
-
+    
         traverse(this.ast as ParseResult<File>, visitor);
+        
         if (!isImported) {
+            // 找到最大的行号（最后一个 import）
+            const lastImportLine = importLines.length > 0 ? Math.max(...importLines) : 0;
+            
             await window?.activeTextEditor?.edit(editBuilder => {
-                const shouldImportCode = this.componentType === 'client' ? this.clientImportCode : this.ssrImportCode;
-                editBuilder.insert(new Position(firstImportLine, 0), shouldImportCode);
-
+                const shouldImportCode = (this.componentType === 'custom' ? this.customImportCode : 
+                                        (this.componentType === 'client' ? this.clientImportCode : this.ssrImportCode));
+                
+                const insertPosition = new Position(lastImportLine, 0);
+                editBuilder.insert(insertPosition, '\n' + shouldImportCode); // 在前面加换行，确保在新的一行
             });
             return true;
-
         } else {
             return false;
         }
@@ -703,8 +706,16 @@ export default class SmartI18nHelper {
 
             },
             VariableDeclaration: (nodePath: any) => {
+                // 自定义的code
+
+                if(this.componentType === 'custom' && nodePath.node.declarations.some((decl:any)=>decl.id.name === "languageStore"&& decl.init?.type === 'CallExpression' && decl.init.callee.name === 'useLanguageStore'))
+                    {
+                        hasHookCode = true;
+                        nodePath.stop();
+                    }    
+
                 if (
-                    nodePath.node.declarations.some(
+                     (this.componentType ==='client' ||this.componentType === 'ssr') &&nodePath.node.declarations.some(
                         (decl: any) =>
                             decl.id.name === 't' &&
                             decl.init?.type === 'CallExpression' &&
@@ -720,7 +731,7 @@ export default class SmartI18nHelper {
         traverse(this.ast as ParseResult<File>, visitor);
         if (!hasHookCode) {
             await window?.activeTextEditor?.edit(editBuilder => {
-                const hookCode = this.componentType === 'client' ? this.hookCode : this.ssrHookCode;
+                const hookCode = this.componentType === 'custom' ? this.customHookCode :(this.componentType === 'client' ? this.hookCode : this.ssrHookCode);
                 // insert 获取函数声明所在行号
                 editBuilder.insert(new Position(hookStartLine, 0), hookCode);
             });

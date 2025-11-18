@@ -3,15 +3,20 @@ import { window } from 'vscode';
 import * as https from 'https';
 import { showError } from './editCode';
 
+// const PROJECTID_OPTIONS = {
+//   ko: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
+//   ja: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
+//   'pt-BR': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
+//   'es-MX': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
+//   en: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
+//   th: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
+//   'zh-Hant-TW': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
+//   'zh-Hans': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
+// };
 const PROJECTID_OPTIONS = {
-  ko: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  ja: '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  'pt-BR': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  'es-MX': '19ff92e7-ae7e-4c7e-9f91-2b989e57b5a3',
-  en: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  th: '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  'zh-Hant-TW': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
-  'zh-Hans': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
+  'zh-Hans':'f2415fe0-3af5-4700-909a-b823622841b9',
+  'en':'f2415fe0-3af5-4700-909a-b823622841b9',
+  'pt-BR':'77f61328-394f-448f-9fb8-cb099c7937bb'
 };
 const WORKSPACE = 'c518c8a5-4ddd-4fad-81a8-b63687308427';
 const APITOKEN = '33_hT9imd7M4JRMtCWBQzfLpBnQZ';
@@ -21,12 +26,13 @@ const APITOKEN = '33_hT9imd7M4JRMtCWBQzfLpBnQZ';
  * @return {*}
  */
 function getAuthorization() {
-  const buffer = Buffer.from(`${WORKSPACE}:${APITOKEN}`);
-  const base64Str = buffer.toString('base64');
-  return `Basic ${base64Str}`;
+  // const buffer = Buffer.from(`${WORKSPACE}:${APITOKEN}`);
+  // const base64Str = buffer.toString('base64');
+  // return `Basic ${base64Str}`;
+  return  `Basic ${Buffer.from('c518c8a5-4ddd-4fad-81a8-b63687308427:40_LmGxTD30izpU7fSRrOrSD6ApO', 'utf-8').toString('base64')}`;
 }
 
-type Lang = 'ko' | 'ja'|'pt-BR' | 'es-MX'|'en' | 'th' |'zh-Hant-TW' | 'zh-Hans' 
+type Lang = 'pt-BR' |'en'| 'zh-Hans' 
 
 /**
  * 获取任务ID
@@ -122,13 +128,13 @@ async function initExport(lang:Lang,localLang:string) {
   try {
     const taskId = await getTaskId(lang);
     const translatesRes = await getLanguageResult(taskId, lang);
-    const formatKeyTranslates:{[key:string]:any} = {};
-    Object.keys(translatesRes).forEach(key => {
-      const newKey = key.replaceAll('.', '_'); // 替换所有 . 为 _
-      formatKeyTranslates[newKey] = translatesRes[key];
-    });
+    // const formatKeyTranslates:{[key:string]:any} = {};
+    // Object.keys(translatesRes).forEach(key => {
+    //   const newKey = key.replaceAll('.', '_'); // 替换所有 . 为 _
+    //   formatKeyTranslates[newKey] = translatesRes[key];
+    // });
     //  文件名映射
-    return  { langType:localLang,result: formatKeyTranslates};
+    return  { langType:localLang,result: translatesRes};
   } catch (error) {
     console.log('init error', error);
   }
@@ -139,16 +145,9 @@ async function initExport(lang:Lang,localLang:string) {
 export default async function  translateSmartcatLocaleAll() {
   try {
       const  getSmartLangTypeMap:any = {
-      'en-us':'en',
-      'ja-jp':'ja',
-      'ko-kr':'ko',
-      'th-th':'th',
-      'zh-Hans':'zh-Hans', // 基准中文映射
-      'zh-tw': 'zh-Hant-TW',// 此处台湾的语言需要映射三种  'zh-hk', 'zh-mo'
-      'zh-hk':'zh-Hant-TW',
-      'zh-mo':'zh-Hant-TW',
-      'pt-br': 'pt-BR',
-      'es-mx':'es-MX',
+      'en':'en',
+      'pt': 'pt-BR',
+      'zh':'zh-Hans',
     };
 
     const promises = Object.keys(getSmartLangTypeMap).map((key)=> initExport(getSmartLangTypeMap[key],key));
@@ -161,4 +160,4 @@ export default async function  translateSmartcatLocaleAll() {
   }
 }
 // 本地调试需要把export es语法移除
-// translateSmartcatLocale();
+translateSmartcatLocaleAll();
