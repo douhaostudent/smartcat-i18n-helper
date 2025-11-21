@@ -6,7 +6,7 @@ import { parse } from '@babel/parser';
 import traverse from '@babel/traverse';
 import type { ParseError, ParseResult } from "@babel/parser";
 import type { File } from '@babel/types';
-import { getLocalWordsByFileName, replaceKey, saveToLocalFile } from './editCode';
+import { getLocalWordsByFileName, replaceKey, saveToLocalFile, getKeyValue } from './editCode';
 // import { saveFormatKeyToLocalFile } from "./feature";
 import type { ExtensionContext, Uri, WebviewPanel } from "vscode";
 import { getFilesByFileType } from './utils';
@@ -42,6 +42,8 @@ export default class SmartI18nHelper {
     languages: Language[] = [];  //支持的语言 遍历一个文件本地
     ast: ParseResult<File> | undefined;
     titleChangeTimer: NodeJS.Timeout | undefined;
+    trans:any[] = [];
+    // trans:any[];
     constructor(context: ExtensionContext) {
         this.context = context;
         this.fileContent = window.activeTextEditor?.document.getText() || this.fileContent;
@@ -60,6 +62,7 @@ export default class SmartI18nHelper {
         this.getLanguages();
         //获取需要翻译的中文
         this.words = this.getChineseWords();
+        this.trans =  this.getSmartExpressStatement();
         if (!this.words?.length) {
             window.showInformationMessage('当前页面无中文，无需翻译');
             return;
@@ -314,6 +317,76 @@ export default class SmartI18nHelper {
         });
         return words;
     }
+
+
+    extractKeyAndLocation(arrowFunc, callNode) {
+        let key = null;
+        
+        // 情况1: v => v.PropertyName
+        if (arrowFunc.body.type === 'MemberExpression' &&
+            arrowFunc.body.property.type === 'Identifier') {
+          key = arrowFunc.body.property.name;
+        }
+        // 情况2: v => { return v.PropertyName; }
+        else if (arrowFunc.body.type === 'BlockStatement' &&
+                 arrowFunc.body.body.length === 1 &&
+                 arrowFunc.body.body[0].type === 'ReturnStatement' &&
+                 arrowFunc.body.body[0].argument.type === 'MemberExpression' &&
+                 arrowFunc.body.body[0].argument.property.type === 'Identifier') {
+          key = arrowFunc.body.body[0].argument.property.name;
+        }
+        
+        if (key) {
+          return {
+            key: key,
+            loc: callNode.loc,
+            start: callNode.start,
+            end: callNode.end
+          };
+        }
+        
+        return null;
+      }
+      
+      
+
+    /**
+     *  通过ast 获取旧版 languageStore.smartcatTranslationText((v) => v.Invitation_code_discount)的语句和key
+     */
+    getSmartExpressStatement(){
+        const ast = this.getAst();
+        if (!ast) { return []; }
+        const trans:any[] = [];
+        traverse(ast, {
+            CallExpression:(path) =>{
+              const { node } = path;
+              
+              // 检查是否是 languageStore.smartcatTranslationText 调用
+              if (node.callee.type === 'MemberExpression' &&
+                  node.callee.object.type === 'Identifier' &&
+                  node.callee.object.name === 'languageStore' &&
+                  node.callee.property.type === 'Identifier' &&
+                  node.callee.property.name === 'smartcatTranslationText') {
+                
+                // 检查参数是否为箭头函数
+                if (node.arguments.length > 0 && 
+                    node.arguments[0].type === 'ArrowFunctionExpression') {
+                        const arrowFunc = node.arguments[0];
+        
+                        // 提取属性名和位置信息
+                        const keyInfo = this.extractKeyAndLocation(arrowFunc, node);
+                        if (keyInfo) {
+                        trans.push(keyInfo);
+                        }
+                      }
+                    }
+                  }
+                });
+                
+        return trans;
+          
+    }
+
 
     /**
      * 通过分析ast分析当前组件类型
@@ -615,12 +688,14 @@ export default class SmartI18nHelper {
                     await window.showTextDocument(this.currentTextDocumentFileUri!);
                     saveToLocalFile(data as Words[], this);  //   每个翻译文件语言追加
                     await this.replaceEditorText(data as Words[]);
+                    await this.replaceOldSmartText();
                     // 自动导入和翻译hook的调用，后续追加
                     const allIsConfigWord = this.words.every(item => !item.isInFunction);
                     if (!allIsConfigWord) {
                         const isInsert = await this.importMethod();  //需要返回是否新增，会影响hookcode的行号，新增修改ast,会增加行号
                         await this.insertHookCode(isInsert);
                     }
+                    this.getSmartExpressStatement();
                     this.webviewPanel?.dispose();
 
                 }
@@ -703,15 +778,24 @@ export default class SmartI18nHelper {
                 if (allWordsInSamescope) {
                     hookStartLine = isInsertImport ? nodePath.node.body.loc.start.line + 1 : nodePath.node.body.loc.start.line;// 获取函数声明起始行号
                 }
-
+            },
+            ArrowFunctionExpression:(nodePath:any)=>{
+                const functionBody = nodePath.node.body;
+                const inFunctionWords = this.words.filter(word => word.isInFunction);
+                if (!inFunctionWords?.length) { return; }
+                const scopeCode = this.fileContent.slice(functionBody.start, functionBody.end);
+                //  严格通过作用域内去判断 检查是否包含所有目标中文字符   todo:待完善精准判断 
+                allWordsInSamescope = inFunctionWords.every(word =>
+                    scopeCode.includes(word.value)
+                );
+                if (allWordsInSamescope) {
+                    hookStartLine = isInsertImport ? nodePath.node.body.loc.start.line + 1 : nodePath.node.body.loc.start.line;// 获取函数声明起始行号
+                }
             },
             VariableDeclaration: (nodePath: any) => {
-                // 自定义的code
-
-                if(this.componentType === 'custom' && nodePath.node.declarations.some((decl:any)=>decl.id.name === "languageStore"&& decl.init?.type === 'CallExpression' && decl.init.callee.name === 'useLanguageStore'))
+                if(this.componentType === 'custom' && nodePath.node.declarations.some((decl:any)=>decl.id.name === "t"&& decl.init?.type === 'CallExpression' && decl.init.callee.name === 'useLanguageStore'))
                     {
                         hasHookCode = true;
-                        nodePath.stop();
                     }    
 
                 if (
@@ -723,6 +807,7 @@ export default class SmartI18nHelper {
                     )
                 ) {
                     hasHookCode = true;
+              
                 }
             },
 
@@ -751,6 +836,23 @@ export default class SmartI18nHelper {
                 editBuilder.replace(selection, (element.isTranslated || !element.isInFunction) ? replaceKey(element) : getValue(element, this));
             });
 
+        });
+
+    }
+    //替换旧版写法
+    async  replaceOldSmartText () {
+        await  window. activeTextEditor?.edit(editBuilder=>{
+            debugger;
+            this.trans.forEach((ele)=>{
+                const { loc,key } = ele;
+                const startPosition = new Position(loc.start.line - 1, loc.start.column);
+                const endPosition = new Position(loc.end.line - 1, loc.end.column);
+                const selection = new Range(startPosition, endPosition);
+                if (!selection) { return; }
+                editBuilder.replace(selection,getKeyValue(key, this));
+                
+            });
+            
         });
 
     }

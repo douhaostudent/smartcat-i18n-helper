@@ -143,6 +143,25 @@ export const getValue = (
   return `{${instance.methodName}("${key}" /* ${value} */)}`;
 };
 
+ export const getKeyValue = (
+  key: any,
+  instance: BaseI18nHelper,
+) => {
+  // if (isTemplate) {
+  //   return `\${${instance.methodName}("${key}" /* ${value} */)}`;
+  // }
+
+  // if (!isJsxAttr) {
+  //   return `${instance.methodName}("${key}" /* ${value} */)`;
+  // }
+
+  // if (isJsxText) {
+  //   return rawValue.replace(value, `{${instance.methodName}("${key}" /* ${value} */)}`);
+  // }
+
+  return `${instance.methodName}("${key}")`;
+};
+
 export const replaceKey = (
   words: any,
 ) => {
@@ -161,6 +180,9 @@ export const replaceKey = (
 
   return `{"${key}" /* ${value} */}`;
 };
+
+
+
 
 
 
