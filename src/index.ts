@@ -319,7 +319,7 @@ export default class SmartI18nHelper {
     }
 
 
-    extractKeyAndLocation(arrowFunc, callNode) {
+    extractKeyAndLocation(arrowFunc:any, callNode:any) {
         let key = null;
         
         // 情况1: v => v.PropertyName
@@ -842,7 +842,6 @@ export default class SmartI18nHelper {
     //替换旧版写法
     async  replaceOldSmartText () {
         await  window. activeTextEditor?.edit(editBuilder=>{
-            debugger;
             this.trans.forEach((ele)=>{
                 const { loc,key } = ele;
                 const startPosition = new Position(loc.start.line - 1, loc.start.column);
