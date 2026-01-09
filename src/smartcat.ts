@@ -14,9 +14,14 @@ import { showError } from './editCode';
 //   'zh-Hans': '0fc74855-c4e3-4ab5-91a2-9ec9ffb46d94',
 // };
 const PROJECTID_OPTIONS = {
-  'zh-Hans':'f2415fe0-3af5-4700-909a-b823622841b9',
-  'en':'f2415fe0-3af5-4700-909a-b823622841b9',
-  'pt-BR':'77f61328-394f-448f-9fb8-cb099c7937bb'
+  "zh-Hans":"f2415fe0-3af5-4700-909a-b823622841b9",
+  "en":"f2415fe0-3af5-4700-909a-b823622841b9",
+  "pt-BR":"77f61328-394f-448f-9fb8-cb099c7937bb",
+  "ja":"77f61328-394f-448f-9fb8-cb099c7937bb",
+  "de":"77f61328-394f-448f-9fb8-cb099c7937bb",
+  "es-MX":"77f61328-394f-448f-9fb8-cb099c7937bb",
+  "ko":"77f61328-394f-448f-9fb8-cb099c7937bb",
+  "th":"f2415fe0-3af5-4700-909a-b823622841b9"
 };
 const WORKSPACE = 'c518c8a5-4ddd-4fad-81a8-b63687308427';
 const APITOKEN = '33_hT9imd7M4JRMtCWBQzfLpBnQZ';
@@ -145,9 +150,14 @@ async function initExport(lang:Lang,localLang:string) {
 export default async function  translateSmartcatLocaleAll() {
   try {
       const  getSmartLangTypeMap:any = {
-      'en':'en',
-      'pt': 'pt-BR',
-      'zh':'zh-Hans',
+        "en":"en",
+        "pt":"pt-BR",
+        "zh":"zh-Hans",
+        "ja":"ja",
+        "de":"de",
+        "es":"es-MX",
+        "kor":"ko",
+        "th":"th"
     };
 
     const promises = Object.keys(getSmartLangTypeMap).map((key)=> initExport(getSmartLangTypeMap[key],key));

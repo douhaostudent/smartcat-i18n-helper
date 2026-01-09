@@ -38,6 +38,37 @@
           "description": "国际化文件后缀名",
           "default": "ts"
         },
+        "smart-i18n-helpler.ProjectId Map":{
+          "type":"object",
+          "description": "projectId的映射",
+          "default":{
+            "zh-Hans":"f2415fe0-3af5-4700-909a-b823622841b9",
+            "en":"f2415fe0-3af5-4700-909a-b823622841b9",
+            "pt-BR":"77f61328-394f-448f-9fb8-cb099c7937bb",
+            "ja":"77f61328-394f-448f-9fb8-cb099c7937bb",
+            "de":"77f61328-394f-448f-9fb8-cb099c7937bb",
+            "es-MX":"77f61328-394f-448f-9fb8-cb099c7937bb",
+            "ko":"77f61328-394f-448f-9fb8-cb099c7937bb",
+            "th":"f2415fe0-3af5-4700-909a-b823622841b9"
+          }  
+        },
+        "smart-i18n-helper.languages":{
+          "type":"array",
+          "description": "语言列表映射",
+          "default":[
+            "en:en",
+            "pt:pt-BR",
+            "zh:zh-Hans",
+            "ja:ja",
+            "de:de",
+            "es:es-MX",
+            "kor:ko",
+            "th:th"
+          ],
+          "items": {
+						"type": "string"
+					}
+        },
         "smart-i18n-helper.SSR Import Code": {
           "type": "string",
           "description": "导入SSR国际化方法的代码",
