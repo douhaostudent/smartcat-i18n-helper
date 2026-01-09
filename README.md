@@ -21,3 +21,7 @@
 ## 安装方法
 1. 在VS Code扩展商店搜索`smartcat-i18n-helper
 2. 点击安装按钮
+
+cd /Users/wangjinli/learn/smart-i18-helper
+vsce package
+这个命令会在当前目录下生成一个.vsix文件，例如 smart-i18n-helper-0.0.4.vsix。
