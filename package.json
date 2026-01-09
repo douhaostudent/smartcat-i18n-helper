@@ -2,9 +2,10 @@
   "name": "smart-i18n-helper",
   "displayName": "smartcat-i18n-helper",
   "description": "",
-  "version": "0.0.5",
+  "version": "0.0.9",
+  "license": "MIT",
   "author": "wangjinli",
-  "publisher": "wngjnl12601",
+  "publisher": "douhaostudent",
   "icon": "smile.png",
   "engines": {
     "vscode": "^1.81.0"
@@ -15,10 +16,6 @@
 		"i18n-helper",
 		"translate"
 	],
-	"repository": {
-		"type": "git",
-		"url": "https://github.com/douhaostudent/smartcat-i18n-helper"
-	},
   "categories": [
     "Other"
   ],
